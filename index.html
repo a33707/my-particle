@@ -31,7 +31,7 @@
     <!-- UI 상단 -->
     <div class="fixed top-6 left-1/2 -translate-x-1/2 z-10 w-[95%] max-w-5xl text-center pointer-events-none">
         <h1 class="text-3xl font-black mb-1 tracking-tighter drop-shadow-2xl italic">✨ 3D SUPER MAGIC ✨</h1>
-        <p class="text-white/60 text-[10px] uppercase tracking-[0.3em] mb-4">크고 화려해진 마법 파티클을 경험하세요</p>
+        <p class="text-white/60 text-[10px] uppercase tracking-[0.3em] mb-4">선명하고 큼직한 마법 파티클을 경험하세요</p>
         
         <div class="glass-ui p-3 rounded-[2rem] flex flex-wrap justify-center gap-2 pointer-events-auto">
             <button onclick="setMode('fireworks')" id="btn-fireworks" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold active">🎆 대폭발</button>
@@ -63,7 +63,7 @@
         let isPressed = false;
         let lastSoundTime = 0;
 
-        // 하트 모양 정의 (Bezier Curve)
+        // 하트 모양 정의
         const heartShape = new THREE.Shape();
         heartShape.moveTo(0, 5);
         heartShape.bezierCurveTo(0, 5, -5, 12, -12, 12);
@@ -128,8 +128,8 @@
                 case 'lightning': playNoise(0.08, 0.15 * intensity, 'highpass', 2000); break;
                 case 'bubbles':
                     const bOsc = audioCtx.createOscillator();
-                    bOsc.frequency.setValueAtTime(1000, now);
-                    bOsc.frequency.exponentialRampToValueAtTime(2500, now + 0.05);
+                    bOsc.frequency.setValueAtTime(1100, now);
+                    bOsc.frequency.exponentialRampToValueAtTime(3000, now + 0.05);
                     gain.gain.setValueAtTime(0.12 * intensity, now);
                     bOsc.connect(gain); bOsc.start(); bOsc.stop(now + 0.08);
                     break;
@@ -154,10 +154,10 @@
             constructor(pos, isMagic = false) {
                 this.isMagic = isMagic;
                 this.life = 1.0;
-                this.decay = isMagic ? (Math.random() * 0.01 + 0.008) : 0; // 수명 조금 더 길게
+                this.decay = isMagic ? (Math.random() * 0.01 + 0.008) : 0; 
                 
-                // 크기 대폭 상향 (타격감 피드백)
-                const sizeBase = isMagic ? Math.random() * 8 + 6 : Math.random() * 2 + 1;
+                // 크기 대폭 상향 고정
+                const sizeBase = isMagic ? Math.random() * 8 + 8 : Math.random() * 2 + 1;
                 let geometry;
                 
                 if (isMagic) {
@@ -167,7 +167,10 @@
                         case 'lightning': geometry = new THREE.TetrahedronGeometry(sizeBase, 0); break;
                         case 'snow': geometry = new THREE.ShapeGeometry(snowShape); break;
                         case 'petals': geometry = new THREE.ShapeGeometry(petalShape); break;
-                        case 'bubbles': geometry = new THREE.SphereGeometry(sizeBase, 16, 16); break;
+                        case 'bubbles': 
+                            // 격자 수(segments)를 5x4로 아주 낮게 설정하여 선이 시원하게 보이도록 함
+                            geometry = new THREE.SphereGeometry(sizeBase, 5, 4); 
+                            break;
                         case 'vortex': geometry = new THREE.CylinderGeometry(0.1, sizeBase, sizeBase*2, 6); break;
                         case 'blackhole': geometry = new THREE.TorusGeometry(sizeBase, sizeBase*0.3, 8, 16); break;
                         case 'rainbow': geometry = new THREE.DodecahedronGeometry(sizeBase, 0); break;
@@ -183,7 +186,7 @@
                     switch(mode) {
                         case 'hearts': color = new THREE.Color(`hsl(${r() * 20 + 340}, 100%, 75%)`); break;
                         case 'stars': color = new THREE.Color(`hsl(${r() * 15 + 45}, 100%, 75%)`); break;
-                        case 'bubbles': color = new THREE.Color(`hsla(${r() * 40 + 190}, 100%, 90%, 0.9)`); break;
+                        case 'bubbles': color = new THREE.Color(0xaaccff); break; 
                         case 'rainbow': color = new THREE.Color(`hsl(${r() * 360}, 100%, 65%)`); break;
                         default: color = new THREE.Color(`hsl(${r() * 360}, 100%, 70%)`);
                     }
@@ -200,23 +203,19 @@
                 };
 
                 if (isMagic && mode === 'bubbles') {
-                    materialOptions.wireframe = true;
-                    materialOptions.opacity = 0.7;
-                    materialOptions.color = new THREE.Color(0xffffff);
+                    materialOptions.wireframe = true; 
+                    materialOptions.opacity = 0.9; 
                 }
 
                 const material = new THREE.MeshBasicMaterial(materialOptions);
                 this.mesh = new THREE.Mesh(geometry, material);
                 this.mesh.position.copy(pos);
 
-                // 하트는 거꾸로 생성되므로 보정
                 if (isMagic && mode === 'hearts') this.mesh.rotation.z = Math.PI;
 
-                // 물리 초기화
                 const r = Math.random;
                 const angle = r() * Math.PI * 2;
                 const phi = r() * Math.PI;
-                // 초기 속도 강화
                 const force = isMagic ? (r() * 12 + 6) : (r() * 1.5 + 0.5);
                 
                 this.velocity = new THREE.Vector3(
@@ -225,7 +224,7 @@
                     Math.cos(phi) * force
                 );
                 
-                // 대폭발 중력 복구
+                // 대폭발 중력 설정 복구
                 this.gravity = (isMagic && mode === 'fireworks') ? -0.2 : 0;
                 if (isMagic && (mode === 'bubbles' || mode === 'hearts' || mode === 'snow')) this.gravity = 0.08; 
 
