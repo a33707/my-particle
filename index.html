@@ -31,7 +31,7 @@
     <!-- UI 상단 -->
     <div class="fixed top-6 left-1/2 -translate-x-1/2 z-10 w-[95%] max-w-5xl text-center pointer-events-none">
         <h1 class="text-3xl font-black mb-1 tracking-tighter drop-shadow-2xl italic">✨ 3D SUPER MAGIC ✨</h1>
-        <p class="text-white/60 text-[10px] uppercase tracking-[0.3em] mb-4">화면을 문질러 손가락 끝에서 뿜어져 나오는 마법을 경험하세요</p>
+        <p class="text-white/60 text-[10px] uppercase tracking-[0.3em] mb-4">드래그 리듬에 맞춰 변하는 부드러운 마법 사운드</p>
         
         <div class="glass-ui p-3 rounded-[2rem] flex flex-wrap justify-center gap-2 pointer-events-auto">
             <button onclick="setMode('fireworks')" id="btn-fireworks" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold active">🎆 대폭발</button>
@@ -63,7 +63,6 @@
         let isPressed = false;
         let lastSoundTime = 0;
 
-        // 하트 모양 정의
         const heartShape = new THREE.Shape();
         heartShape.moveTo(0, 5);
         heartShape.bezierCurveTo(0, 5, -5, 12, -12, 12);
@@ -85,14 +84,14 @@
         snowShape.lineTo(-10, -1); snowShape.lineTo(-10, 1); snowShape.lineTo(-1, 1);
         snowShape.lineTo(-1, 10);
 
-        // --- 사운드 엔진 ---
+        // --- 사운드 엔진 (맥락 중심 사운드 디자인) ---
         let audioCtx;
         function initAudio() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             if (audioCtx.state === 'suspended') audioCtx.resume();
         }
 
-        function playNoise(duration, volume, filterType, filterFreq) {
+        function playSoftNoise(duration, volume, freq) {
             const bufferSize = audioCtx.sampleRate * duration;
             const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
             const data = buffer.getChannelData(0);
@@ -100,53 +99,134 @@
             const noise = audioCtx.createBufferSource();
             noise.buffer = buffer;
             const filter = audioCtx.createBiquadFilter();
-            filter.type = filterType;
-            filter.frequency.setValueAtTime(filterFreq, audioCtx.currentTime);
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(freq, audioCtx.currentTime);
             const gain = audioCtx.createGain();
             gain.gain.setValueAtTime(volume, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
             noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
             noise.start();
         }
 
-        function playMagicSound(type, intensity = 1.0) {
+        function playMagicSound(type, isClick = false) {
             if (!soundEnabled || !audioCtx) return;
             const now = audioCtx.currentTime;
-            if (now - lastSoundTime < 0.04) return;
+            
+            // 드래그 중에는 소리 트리거 간격을 훨씬 길게 하여 '웅성거림' 방지
+            const interval = isClick ? 0.05 : 0.25; 
+            if (now - lastSoundTime < interval) return;
             lastSoundTime = now;
-            const gain = audioCtx.createGain();
-            gain.connect(audioCtx.destination);
+
+            const masterGain = audioCtx.createGain();
+            masterGain.connect(audioCtx.destination);
+            // 드래그 시 볼륨을 아주 미세하게 설정
+            const vol = isClick ? 0.15 : 0.04;
+
             switch(type) {
-                case 'fireworks':
-                    const fOsc = audioCtx.createOscillator();
-                    fOsc.frequency.setValueAtTime(150, now);
-                    fOsc.frequency.exponentialRampToValueAtTime(40, now + 0.15);
-                    gain.gain.setValueAtTime(0.3 * intensity, now);
-                    fOsc.connect(gain); fOsc.start(); fOsc.stop(now + 0.15);
-                    playNoise(0.2, 0.05, 'lowpass', 1000);
+                case 'fireworks': {
+                    const osc = audioCtx.createOscillator();
+                    osc.frequency.setValueAtTime(isClick ? 80 : 60, now);
+                    osc.frequency.exponentialRampToValueAtTime(10, now + 0.3);
+                    masterGain.gain.setValueAtTime(vol * 2, now);
+                    masterGain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                    osc.connect(masterGain); osc.start(); osc.stop(now + 0.3);
                     break;
-                case 'lightning': playNoise(0.08, 0.15 * intensity, 'highpass', 2000); break;
-                case 'bubbles':
-                    const bOsc = audioCtx.createOscillator();
-                    bOsc.frequency.setValueAtTime(1100, now);
-                    bOsc.frequency.exponentialRampToValueAtTime(3000, now + 0.05);
-                    gain.gain.setValueAtTime(0.12 * intensity, now);
-                    bOsc.connect(gain); bOsc.start(); bOsc.stop(now + 0.08);
+                }
+                case 'hearts': {
+                    // 핑크하트: 부드럽고 따뜻한 울림 (FM 합성 느낌)
+                    const carrier = audioCtx.createOscillator();
+                    const modulator = audioCtx.createOscillator();
+                    const modGain = audioCtx.createGain();
+
+                    carrier.type = 'sine';
+                    modulator.type = 'sine';
+                    
+                    const baseFreq = isClick ? 349.23 : 261.63 + (Math.random() * 5); // F4 vs C4
+                    carrier.frequency.setValueAtTime(baseFreq, now);
+                    modulator.frequency.setValueAtTime(baseFreq * 2, now);
+                    modGain.gain.setValueAtTime(baseFreq * 0.5, now);
+
+                    modulator.connect(modGain);
+                    modGain.connect(carrier.frequency);
+                    carrier.connect(masterGain);
+
+                    masterGain.gain.setValueAtTime(0, now);
+                    masterGain.gain.linearRampToValueAtTime(vol, now + 0.05); // 어택 부드럽게
+                    masterGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+                    carrier.start(); modulator.start();
+                    carrier.stop(now + 0.5); modulator.stop(now + 0.5);
                     break;
-                case 'blackhole':
-                    const bhOsc = audioCtx.createOscillator();
-                    bhOsc.frequency.setValueAtTime(120, now);
-                    bhOsc.frequency.linearRampToValueAtTime(5, now + 0.4);
-                    gain.gain.setValueAtTime(0.25 * intensity, now);
-                    bhOsc.connect(gain); bhOsc.start(); bhOsc.stop(now + 0.4);
+                }
+                case 'stars': {
+                    const osc = audioCtx.createOscillator();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(isClick ? 1200 : 900, now);
+                    masterGain.gain.setValueAtTime(vol * 0.5, now);
+                    masterGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+                    osc.connect(masterGain); osc.start(); osc.stop(now + 0.2);
                     break;
-                default:
-                    const mOsc = audioCtx.createOscillator();
-                    mOsc.type = 'triangle';
-                    mOsc.frequency.setValueAtTime(type === 'hearts' ? 660 : 1200, now);
-                    gain.gain.setValueAtTime(0.07 * intensity, now);
-                    mOsc.connect(gain); mOsc.start(); mOsc.stop(now + 0.15);
+                }
+                case 'lightning': {
+                    playSoftNoise(0.1, vol * 1.5, 2000);
+                    break;
+                }
+                case 'snow': {
+                    playSoftNoise(0.4, vol * 0.4, 4000);
+                    break;
+                }
+                case 'petals': {
+                    playSoftNoise(0.6, vol * 0.3, 1000);
+                    break;
+                }
+                case 'bubbles': {
+                    const osc = audioCtx.createOscillator();
+                    osc.frequency.setValueAtTime(600, now);
+                    osc.frequency.exponentialRampToValueAtTime(1500, now + 0.1);
+                    masterGain.gain.setValueAtTime(vol, now);
+                    masterGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+                    osc.connect(masterGain); osc.start(); osc.stop(now + 0.1);
+                    break;
+                }
+                case 'vortex': {
+                    const osc = audioCtx.createOscillator();
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.linearRampToValueAtTime(300, now + 0.4);
+                    masterGain.gain.setValueAtTime(vol * 0.5, now);
+                    masterGain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+                    osc.connect(masterGain); osc.start(); osc.stop(now + 0.4);
+                    break;
+                }
+                case 'blackhole': {
+                    const osc = audioCtx.createOscillator();
+                    osc.frequency.setValueAtTime(100, now);
+                    osc.frequency.linearRampToValueAtTime(40, now + 0.6);
+                    masterGain.gain.setValueAtTime(vol, now);
+                    masterGain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+                    osc.connect(masterGain); osc.start(); osc.stop(now + 0.6);
+                    break;
+                }
+                case 'rainbow': {
+                    const freqs = isClick ? [440, 554, 659] : [261, 329, 392];
+                    freqs.forEach(f => {
+                        const osc = audioCtx.createOscillator();
+                        osc.frequency.setValueAtTime(f, now);
+                        const g = audioCtx.createGain();
+                        g.gain.setValueAtTime(vol * 0.3, now);
+                        g.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+                        osc.connect(g); g.connect(audioCtx.destination);
+                        osc.start(); osc.stop(now + 0.8);
+                    });
+                    break;
+                }
             }
+        }
+
+        function toggleMute() {
+            soundEnabled = !soundEnabled;
+            const btn = document.getElementById('audio-toggle');
+            btn.textContent = soundEnabled ? '🔊' : '🔇';
+            btn.style.opacity = soundEnabled ? '1' : '0.5';
         }
 
         // --- 파티클 시스템 ---
@@ -161,14 +241,16 @@
                 
                 if (isMagic) {
                     switch(mode) {
-                        case 'hearts': geometry = new THREE.ShapeGeometry(heartShape); break;
+                        case 'hearts': 
+                            geometry = new THREE.ExtrudeGeometry(heartShape, { 
+                                depth: 4, bevelEnabled: true, bevelThickness: 1, bevelSize: 1, bevelSegments: 3 
+                            }); 
+                            break;
                         case 'stars': geometry = new THREE.OctahedronGeometry(sizeBase, 0); break;
                         case 'lightning': geometry = new THREE.TetrahedronGeometry(sizeBase, 0); break;
                         case 'snow': geometry = new THREE.ShapeGeometry(snowShape); break;
                         case 'petals': geometry = new THREE.ShapeGeometry(petalShape); break;
-                        case 'bubbles': 
-                            geometry = new THREE.SphereGeometry(sizeBase, 5, 4); 
-                            break;
+                        case 'bubbles': geometry = new THREE.SphereGeometry(sizeBase, 5, 4); break;
                         case 'vortex': geometry = new THREE.CylinderGeometry(0.1, sizeBase, sizeBase*2, 6); break;
                         case 'blackhole': geometry = new THREE.TorusGeometry(sizeBase, sizeBase*0.3, 8, 16); break;
                         case 'rainbow': geometry = new THREE.DodecahedronGeometry(sizeBase, 0); break;
@@ -178,9 +260,9 @@
                     geometry = new THREE.SphereGeometry(sizeBase, 4, 4);
                 }
                 
+                const r = Math.random;
                 let color;
                 if (isMagic) {
-                    const r = Math.random;
                     switch(mode) {
                         case 'hearts': color = new THREE.Color(`hsl(${r() * 20 + 340}, 100%, 75%)`); break;
                         case 'stars': color = new THREE.Color(`hsl(${r() * 15 + 45}, 100%, 75%)`); break;
@@ -189,21 +271,12 @@
                         default: color = new THREE.Color(`hsl(${r() * 360}, 100%, 70%)`);
                     }
                 } else {
-                    const h = Math.random() > 0.5 ? 260 : 320;
+                    const h = r() > 0.5 ? 260 : 320;
                     color = new THREE.Color(`hsl(${h}, 95%, 65%)`);
                 }
 
-                const materialOptions = { 
-                    color: color, 
-                    transparent: true, 
-                    opacity: isMagic ? 1 : 0.8,
-                    side: THREE.DoubleSide
-                };
-
-                if (isMagic && mode === 'bubbles') {
-                    materialOptions.wireframe = true; 
-                    materialOptions.opacity = 0.9; 
-                }
+                const materialOptions = { color: color, transparent: true, opacity: isMagic ? 1 : 0.8, side: THREE.DoubleSide };
+                if (isMagic && mode === 'bubbles') { materialOptions.wireframe = true; materialOptions.opacity = 0.9; }
 
                 const material = new THREE.MeshBasicMaterial(materialOptions);
                 this.mesh = new THREE.Mesh(geometry, material);
@@ -211,7 +284,6 @@
 
                 if (isMagic && mode === 'hearts') this.mesh.rotation.z = Math.PI;
 
-                const r = Math.random;
                 const angle = r() * Math.PI * 2;
                 const phi = r() * Math.PI;
                 const force = isMagic ? (r() * 12 + 6) : (r() * 1.5 + 0.5);
@@ -234,7 +306,6 @@
                 if (this.isMagic) {
                     this.life -= this.decay;
                     this.mesh.material.opacity = Math.max(0, this.life);
-                    
                     this.mesh.rotation.x += this.rotationSpeed.x;
                     this.mesh.rotation.y += this.rotationSpeed.y;
                     this.mesh.rotation.z += this.rotationSpeed.z;
@@ -252,10 +323,7 @@
                         const dist = vec.length();
                         if (dist > 5) {
                             this.velocity.add(vec.normalize().multiplyScalar(1.5));
-                            if (dist < 60) {
-                                this.mesh.scale.multiplyScalar(0.92);
-                                this.velocity.applyAxisAngle(new THREE.Vector3(0,0,1), 0.5);
-                            }
+                            if (dist < 60) { this.mesh.scale.multiplyScalar(0.92); this.velocity.applyAxisAngle(new THREE.Vector3(0,0,1), 0.5); }
                         }
                     }
 
@@ -330,19 +398,9 @@
 
         function onMouseUp() { isPressed = false; }
 
-        function onTouchStart(e) {
-            e.preventDefault(); 
-            initAudio(); 
-            isPressed = true;
-            updateTouch(e); 
-            spawnMagic(true);
-        }
+        function onTouchStart(e) { e.preventDefault(); initAudio(); isPressed = true; updateTouch(e); spawnMagic(true); }
 
-        function onTouchMove(e) {
-            e.preventDefault(); 
-            updateTouch(e);
-            if (isPressed) spawnMagic(false);
-        }
+        function onTouchMove(e) { e.preventDefault(); updateTouch(e); if (isPressed) spawnMagic(false); }
 
         function updateTouch(e) {
             if (e.touches.length > 0) {
@@ -354,7 +412,7 @@
         }
 
         function spawnMagic(isClick = false) {
-            playMagicSound(mode, isClick ? 1.0 : 0.75);
+            playMagicSound(mode, isClick);
             const count = isClick ? 100 : 25;
             for (let i = 0; i < count; i++) {
                 const p = new MagicParticle(mouse3D, true);
@@ -367,14 +425,7 @@
             mode = newMode;
             document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('btn-' + newMode).classList.add('active');
-            initAudio(); playMagicSound(newMode, 1.4);
-        }
-
-        function toggleMute() {
-            soundEnabled = !soundEnabled;
-            const btn = document.getElementById('audio-toggle');
-            btn.textContent = soundEnabled ? '🔊' : '🔇';
-            btn.style.opacity = soundEnabled ? '1' : '0.5';
+            initAudio(); playMagicSound(newMode, true);
         }
 
         function animate() {
@@ -386,10 +437,7 @@
             for (let i = magicParticles.length - 1; i >= 0; i--) {
                 const p = magicParticles[i];
                 p.update();
-                if (p.life <= 0) {
-                    magicParticlesGroup.remove(p.mesh);
-                    magicParticles.splice(i, 1);
-                }
+                if (p.life <= 0) { magicParticlesGroup.remove(p.mesh); magicParticles.splice(i, 1); }
             }
             renderer.render(scene, camera);
         }
