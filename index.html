@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>슈퍼 마법 파티클 연구소 🌟</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #010103; color: #fff; font-family: "Pretendard", -apple-system, sans-serif; }
+        canvas { display: block; touch-action: none; cursor: crosshair; }
+        .glass-ui {
+            background: rgba(10, 10, 25, 0.85);
+            backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+        }
+        button.active {
+            background: linear-gradient(135deg, #4f46e5, #ec4899);
+            color: white;
+            transform: scale(1.05);
+            box-shadow: 0 0 25px rgba(236, 72, 153, 0.6);
+            border-color: rgba(255, 255, 255, 0.6);
+        }
+        .mode-btn { transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); border: 1px solid rgba(255,255,255,0.1); }
+        .mode-btn:active { transform: scale(0.95); }
+    </style>
+</head>
+<body>
+
+    <!-- UI 상단 -->
+    <div class="fixed top-6 left-1/2 -translate-x-1/2 z-10 w-[95%] max-w-5xl text-center pointer-events-none">
+        <h1 class="text-3xl font-black mb-1 tracking-tighter drop-shadow-2xl italic">✨ SUPER MAGIC ✨</h1>
+        <p class="text-white/60 text-[10px] uppercase tracking-[0.3em] mb-4">입체적인 마법 사운드와 함께 파티클을 스폰하세요</p>
+        
+        <div class="glass-ui p-3 rounded-[2rem] flex flex-wrap justify-center gap-2 pointer-events-auto">
+            <button onclick="setMode('fireworks')" id="btn-fireworks" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold active">🎆 대폭발</button>
+            <button onclick="setMode('hearts')" id="btn-hearts" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">💖 핑크하트</button>
+            <button onclick="setMode('stars')" id="btn-stars" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">⭐ 황금별빛</button>
+            <button onclick="setMode('lightning')" id="btn-lightning" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">⚡ 푸른번개</button>
+            <button onclick="setMode('snow')" id="btn-snow" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">❄️ 눈송이</button>
+            <button onclick="setMode('petals')" id="btn-petals" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🌸 꽃잎</button>
+            <button onclick="setMode('bubbles')" id="btn-bubbles" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🫧 비눗방울</button>
+            <button onclick="setMode('vortex')" id="btn-vortex" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🌪️ 소용돌이</button>
+            <button onclick="setMode('blackhole')" id="btn-blackhole" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🌀 블랙홀</button>
+            <button onclick="setMode('rainbow')" id="btn-rainbow" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🌈 무지개</button>
+        </div>
+    </div>
+
+    <button onclick="toggleMute()" id="audio-toggle" class="fixed bottom-8 right-8 z-10 glass-ui w-14 h-14 rounded-full flex items-center justify-center text-2xl transition-all hover:scale-110 active:scale-90 shadow-2xl">🔊</button>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let magicParticles = [];   
+        let ambientParticles = []; 
+        let mode = 'fireworks';
+        let soundEnabled = true;
+        const mouse = { x: -1000, y: -1000, radius: 50, pressed: false };
+        let lastSoundTime = 0;
+
+        // --- 고해상도 마법 사운드 엔진 ---
+        let audioCtx;
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        // 공용 노이즈 생성 (텍스처 소리용)
+        function playNoise(duration, volume, filterType, filterFreq) {
+            const bufferSize = audioCtx.sampleRate * duration;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = filterType;
+            filter.frequency.setValueAtTime(filterFreq, audioCtx.currentTime);
+
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            noise.start();
+        }
+
+        function playMagicSound(type, intensity = 1.0) {
+            if (!soundEnabled || !audioCtx) return;
+            const now = audioCtx.currentTime;
+            if (now - lastSoundTime < 0.04) return; 
+            lastSoundTime = now;
+
+            const gain = audioCtx.createGain();
+            gain.connect(audioCtx.destination);
+
+            switch(type) {
+                case 'fireworks': // 펑! (저음 타격 + 노이즈)
+                    const fOsc = audioCtx.createOscillator();
+                    fOsc.frequency.setValueAtTime(150, now);
+                    fOsc.frequency.exponentialRampToValueAtTime(40, now + 0.1);
+                    gain.gain.setValueAtTime(0.3 * intensity, now);
+                    fOsc.connect(gain);
+                    fOsc.start(); fOsc.stop(now + 0.15);
+                    playNoise(0.2, 0.05, 'lowpass', 1000);
+                    break;
+
+                case 'hearts': // 뾰롱 (부드러운 하프 느낌)
+                    const hOsc = audioCtx.createOscillator();
+                    hOsc.type = 'sine';
+                    hOsc.frequency.setValueAtTime(523.25, now);
+                    hOsc.frequency.exponentialRampToValueAtTime(1046.5, now + 0.3);
+                    gain.gain.setValueAtTime(0.1 * intensity, now);
+                    hOsc.connect(gain);
+                    hOsc.start(); hOsc.stop(now + 0.3);
+                    break;
+
+                case 'stars': // 칭~ (금속성 팅글)
+                    const sOsc = audioCtx.createOscillator();
+                    sOsc.type = 'triangle';
+                    sOsc.frequency.setValueAtTime(2000, now);
+                    sOsc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
+                    gain.gain.setValueAtTime(0.05 * intensity, now);
+                    sOsc.connect(gain);
+                    sOsc.start(); sOsc.stop(now + 0.1);
+                    break;
+
+                case 'lightning': // 지직! (거친 노이즈)
+                    playNoise(0.08, 0.15 * intensity, 'highpass', 2000);
+                    const lOsc = audioCtx.createOscillator();
+                    lOsc.type = 'square';
+                    lOsc.frequency.setValueAtTime(80, now);
+                    lOsc.connect(gain);
+                    gain.gain.setValueAtTime(0.05, now);
+                    lOsc.start(); lOsc.stop(now + 0.08);
+                    break;
+
+                case 'snow': // 사각사각 (고역 노이즈)
+                    playNoise(0.3, 0.03 * intensity, 'highpass', 5000);
+                    break;
+
+                case 'petals': // 쉬익 (부드러운 바람)
+                    playNoise(0.4, 0.02 * intensity, 'bandpass', 1500);
+                    break;
+
+                case 'bubbles': // 퐁! (물방울 파열음)
+                    const bOsc = audioCtx.createOscillator();
+                    bOsc.frequency.setValueAtTime(800, now);
+                    bOsc.frequency.exponentialRampToValueAtTime(2500, now + 0.04);
+                    gain.gain.setValueAtTime(0.12 * intensity, now);
+                    bOsc.connect(gain);
+                    bOsc.start(); bOsc.stop(now + 0.05);
+                    break;
+
+                case 'vortex': // 위잉~ (필터 스윕)
+                    const vOsc = audioCtx.createOscillator();
+                    vOsc.type = 'sawtooth';
+                    vOsc.frequency.setValueAtTime(200, now);
+                    const vFilter = audioCtx.createBiquadFilter();
+                    vFilter.frequency.setValueAtTime(100, now);
+                    vFilter.frequency.exponentialRampToValueAtTime(2000, now + 0.2);
+                    vOsc.connect(vFilter);
+                    vFilter.connect(gain);
+                    gain.gain.setValueAtTime(0.03 * intensity, now);
+                    vOsc.start(); vOsc.stop(now + 0.2);
+                    break;
+
+                case 'blackhole': // 우우웅... (저음 흡입)
+                    const bhOsc = audioCtx.createOscillator();
+                    bhOsc.frequency.setValueAtTime(100, now);
+                    bhOsc.frequency.linearRampToValueAtTime(10, now + 0.5);
+                    gain.gain.setValueAtTime(0.2 * intensity, now);
+                    bhOsc.connect(gain);
+                    bhOsc.start(); bhOsc.stop(now + 0.5);
+                    break;
+
+                case 'rainbow': // 멜로딕 (랜덤 피치)
+                    const rOsc = audioCtx.createOscillator();
+                    rOsc.frequency.setValueAtTime(400 + Math.random() * 800, now);
+                    gain.gain.setValueAtTime(0.06 * intensity, now);
+                    rOsc.connect(gain);
+                    rOsc.start(); rOsc.stop(now + 0.1);
+                    break;
+            }
+        }
+
+        function toggleMute() {
+            soundEnabled = !soundEnabled;
+            const btn = document.getElementById('audio-toggle');
+            btn.textContent = soundEnabled ? '🔊' : '🔇';
+            btn.style.opacity = soundEnabled ? '1' : '0.5';
+            if(soundEnabled) { initAudio(); playMagicSound('stars'); }
+        }
+
+        // --- 파티클 클래스 ---
+        class Particle {
+            constructor(x, y, isMagic = false) {
+                this.x = x; this.y = y; this.isMagic = isMagic;
+                this.life = 1.0;
+                this.decay = isMagic ? (Math.random() * 0.02 + 0.012) : 0;
+                this.baseX = x; this.baseY = y;
+                this.initPhysics();
+            }
+
+            initPhysics() {
+                const r = Math.random;
+                const angle = r() * Math.PI * 2;
+                const force = this.isMagic ? (r() * 9 + 2) : (r() * 0.4);
+                
+                this.vx = Math.cos(angle) * force;
+                this.vy = Math.sin(angle) * force;
+                this.gravity = 0;
+                this.friction = 0.96;
+                this.size = this.isMagic ? r() * 4 + 2 : r() * 1.2 + 0.4;
+
+                if (this.isMagic) {
+                    switch(mode) {
+                        case 'fireworks': this.gravity = 0.2; this.color = `hsl(${r() * 360}, 100%, 65%)`; break;
+                        case 'hearts': this.vy = -(r() * 4 + 2); this.color = `hsl(${r() * 20 + 340}, 95%, 75%)`; break;
+                        case 'stars': this.color = `hsl(${r() * 15 + 45}, 100%, 60%)`; break;
+                        case 'lightning': this.vx *= 3; this.vy *= 3; this.decay = 0.1; this.color = '#fff'; break;
+                        case 'snow': this.vy = r() * 2 + 0.5; this.vx = (r() - 0.5) * 1.5; this.color = '#fff'; break;
+                        case 'petals': this.vy = r() * 1.2 + 0.5; this.color = `hsl(${r() * 20 + 330}, 80%, 85%)`; break;
+                        case 'bubbles': this.vy = -(r() * 2.5 + 1); this.color = `hsla(${r() * 40 + 190}, 85%, 85%, 0.7)`; break;
+                        case 'blackhole': this.vx *= 0.5; this.vy *= 0.5; this.color = `hsl(${r() * 60 + 240}, 100%, 60%)`; break;
+                        case 'vortex': this.color = `hsl(${r() * 30 + 160}, 100%, 70%)`; break;
+                        case 'rainbow': this.hue = r() * 360; this.color = `hsl(${this.hue}, 100%, 60%)`; break;
+                    }
+                } else {
+                    this.color = 'rgba(255,255,255,0.2)';
+                    this.angle = Math.random() * Math.PI * 2;
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.translate(this.x, this.y);
+                const s = this.size;
+
+                if (this.isMagic) {
+                    if (mode === 'hearts') {
+                        const h = s * 3.5;
+                        ctx.beginPath();
+                        ctx.moveTo(0, h * 0.3);
+                        ctx.bezierCurveTo(-h * 0.5, -h * 0.3, -h, h * 0.1, 0, h * 0.8);
+                        ctx.bezierCurveTo(h, h * 0.1, h * 0.5, -h * 0.3, 0, h * 0.3);
+                        ctx.fill();
+                    } else if (mode === 'stars') {
+                        const r = s * 4.5;
+                        ctx.beginPath();
+                        for(let i=0; i<5; i++) {
+                            ctx.lineTo(Math.cos((18+i*72)/180*Math.PI)*r, -Math.sin((18+i*72)/180*Math.PI)*r);
+                            ctx.lineTo(Math.cos((54+i*72)/180*Math.PI)*r/2, -Math.sin((54+i*72)/180*Math.PI)*r/2);
+                        }
+                        ctx.fill();
+                    } else if (mode === 'snow') {
+                        ctx.beginPath(); ctx.arc(0,0, s*2, 0, Math.PI*2); ctx.fill();
+                    } else if (mode === 'bubbles') {
+                        ctx.strokeStyle = this.color; ctx.lineWidth = 1.2;
+                        ctx.beginPath(); ctx.arc(0,0, s*5, 0, Math.PI*2); ctx.stroke();
+                        ctx.fillStyle = "rgba(255,255,255,0.3)";
+                        ctx.beginPath(); ctx.arc(-s*1.5, -s*1.5, s, 0, Math.PI*2); ctx.fill();
+                    } else {
+                        ctx.beginPath(); ctx.arc(0,0, s*2.2, 0, Math.PI*2); ctx.fill();
+                    }
+                } else {
+                    ctx.beginPath(); ctx.arc(0, 0, s, 0, Math.PI * 2); ctx.fill();
+                }
+                ctx.restore();
+            }
+
+            update() {
+                if (this.isMagic) {
+                    this.life -= this.decay;
+                    
+                    if (mode === 'vortex') {
+                        const dx = mouse.x - this.x;
+                        const dy = mouse.y - this.y;
+                        const dist = Math.sqrt(dx*dx + dy*dy);
+                        if (dist < 150) { // 반경 최적화
+                            const force = (150 - dist) / 150;
+                            this.vx += dy * 0.12 * force; 
+                            this.vy -= dx * 0.12 * force;
+                            this.vx += dx * 0.05 * force; 
+                            this.vy += dy * 0.05 * force;
+                        }
+                    } else if (mode === 'blackhole') {
+                        const dx = mouse.x - this.x;
+                        const dy = mouse.y - this.y;
+                        const dist = Math.sqrt(dx*dx + dy*dy);
+                        if (dist > 5) {
+                            const pull = 2.5 / (dist * 0.05 + 1);
+                            this.vx += dx / dist * pull;
+                            this.vy += dy / dist * pull;
+                            if (dist < 40) {
+                                this.vx += dy * 0.3;
+                                this.vy -= dx * 0.3;
+                                this.size *= 0.94;
+                            }
+                        }
+                    }
+
+                    this.vy += this.gravity;
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    this.vx *= this.friction;
+                    this.vy *= this.friction;
+
+                    if (mode === 'rainbow') {
+                        this.hue = (this.hue + 10) % 360;
+                        this.color = `hsl(${this.hue}, 100%, 65%)`;
+                    }
+                } else {
+                    this.x += this.vx + Math.cos(this.angle) * 0.1;
+                    this.y += this.vy + Math.sin(this.angle) * 0.1;
+                    this.angle += 0.02;
+                    this.vx *= 0.96; this.vy *= 0.96;
+                    this.vx -= (this.x - this.baseX) / 200;
+                    this.vy -= (this.y - this.baseY) / 200;
+                }
+            }
+        }
+
+        // --- 핵심 인터랙션 ---
+        function spawnMagic(isClick = false) {
+            initAudio();
+            playMagicSound(mode, isClick ? 1.0 : 0.6);
+            
+            const count = isClick ? 65 : 15;
+            for (let i = 0; i < count; i++) {
+                magicParticles.push(new Particle(mouse.x, mouse.y, true));
+            }
+            
+            ambientParticles.forEach(p => {
+                const dx = mouse.x - p.x; const dy = mouse.y - p.y;
+                const d = Math.sqrt(dx*dx + dy*dy);
+                if (d < 100) {
+                    const f = (100 - d) / 100;
+                    const pwr = isClick ? 45 : 15;
+                    p.vx -= (dx / d) * f * pwr;
+                    p.vy -= (dy / d) * f * pwr;
+                }
+            });
+        }
+
+        function init() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            ambientParticles = [];
+            magicParticles = [];
+            let qty = (canvas.width * canvas.height) / 1000;
+            for (let i = 0; i < qty; i++) {
+                ambientParticles.push(new Particle(Math.random() * canvas.width, Math.random() * canvas.height, false));
+            }
+        }
+
+        const updatePos = (e) => {
+            const x = e.clientX || (e.touches && e.touches[0].clientX);
+            const y = e.clientY || (e.touches && e.touches[0].clientY);
+            if(x) { mouse.x = x; mouse.y = y; }
+        };
+
+        window.addEventListener('mousedown', (e) => { mouse.pressed = true; updatePos(e); spawnMagic(true); });
+        window.addEventListener('mousemove', (e) => { updatePos(e); if(mouse.pressed) spawnMagic(false); });
+        window.addEventListener('mouseup', () => mouse.pressed = false);
+        window.addEventListener('touchstart', (e) => { e.preventDefault(); mouse.pressed = true; updatePos(e); spawnMagic(true); });
+        window.addEventListener('touchmove', (e) => { e.preventDefault(); updatePos(e); if(mouse.pressed) spawnMagic(false); });
+        window.addEventListener('touchend', () => mouse.pressed = false);
+
+        function setMode(newMode) {
+            mode = newMode;
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn-' + newMode).classList.add('active');
+            initAudio(); playMagicSound(newMode, 1.2);
+        }
+
+        function animate() {
+            if (['vortex', 'fireworks', 'lightning', 'blackhole'].includes(mode)) {
+                ctx.fillStyle = 'rgba(1, 1, 3, 0.22)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+
+            ambientParticles.forEach(p => { p.update(); p.draw(); });
+            
+            for (let i = magicParticles.length - 1; i >= 0; i--) {
+                const p = magicParticles[i];
+                p.update();
+                p.draw();
+                if (p.life <= 0) magicParticles.splice(i, 1);
+            }
+            
+            if (magicParticles.length > 1800) magicParticles.splice(0, 40);
+            requestAnimationFrame(animate);
+        }
+
+        window.addEventListener('resize', init);
+        init();
+        animate();
+    </script>
+</body>
+</html>
