@@ -31,7 +31,7 @@
     <!-- UI 상단 -->
     <div class="fixed top-6 left-1/2 -translate-x-1/2 z-10 w-[95%] max-w-5xl text-center pointer-events-none">
         <h1 class="text-3xl font-black mb-1 tracking-tighter drop-shadow-2xl italic">✨ 3D SUPER MAGIC ✨</h1>
-        <p class="text-white/60 text-[10px] uppercase tracking-[0.3em] mb-4">선명하고 큼직한 마법 파티클을 경험하세요</p>
+        <p class="text-white/60 text-[10px] uppercase tracking-[0.3em] mb-4">화면을 문질러 손가락 끝에서 뿜어져 나오는 마법을 경험하세요</p>
         
         <div class="glass-ui p-3 rounded-[2rem] flex flex-wrap justify-center gap-2 pointer-events-auto">
             <button onclick="setMode('fireworks')" id="btn-fireworks" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold active">🎆 대폭발</button>
@@ -156,7 +156,6 @@
                 this.life = 1.0;
                 this.decay = isMagic ? (Math.random() * 0.01 + 0.008) : 0; 
                 
-                // 크기 대폭 상향 고정
                 const sizeBase = isMagic ? Math.random() * 8 + 8 : Math.random() * 2 + 1;
                 let geometry;
                 
@@ -168,7 +167,6 @@
                         case 'snow': geometry = new THREE.ShapeGeometry(snowShape); break;
                         case 'petals': geometry = new THREE.ShapeGeometry(petalShape); break;
                         case 'bubbles': 
-                            // 격자 수(segments)를 5x4로 아주 낮게 설정하여 선이 시원하게 보이도록 함
                             geometry = new THREE.SphereGeometry(sizeBase, 5, 4); 
                             break;
                         case 'vortex': geometry = new THREE.CylinderGeometry(0.1, sizeBase, sizeBase*2, 6); break;
@@ -224,7 +222,6 @@
                     Math.cos(phi) * force
                 );
                 
-                // 대폭발 중력 설정 복구
                 this.gravity = (isMagic && mode === 'fireworks') ? -0.2 : 0;
                 if (isMagic && (mode === 'bubbles' || mode === 'hearts' || mode === 'snow')) this.gravity = 0.08; 
 
@@ -334,20 +331,26 @@
         function onMouseUp() { isPressed = false; }
 
         function onTouchStart(e) {
-            e.preventDefault(); initAudio(); isPressed = true;
-            updateTouch(e); spawnMagic(true);
+            e.preventDefault(); 
+            initAudio(); 
+            isPressed = true;
+            updateTouch(e); 
+            spawnMagic(true);
         }
 
         function onTouchMove(e) {
-            e.preventDefault(); updateTouch(e);
+            e.preventDefault(); 
+            updateTouch(e);
             if (isPressed) spawnMagic(false);
         }
 
         function updateTouch(e) {
-            const touch = e.touches[0];
-            mouse2D.x = (touch.clientX / window.innerWidth) * 2 - 1;
-            mouse2D.y = -(touch.clientY / window.innerHeight) * 2 + 1;
-            updateMouse3D();
+            if (e.touches.length > 0) {
+                const touch = e.touches[0];
+                mouse2D.x = (touch.clientX / window.innerWidth) * 2 - 1;
+                mouse2D.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+                updateMouse3D();
+            }
         }
 
         function spawnMagic(isClick = false) {
