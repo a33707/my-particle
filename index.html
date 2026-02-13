@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>슈퍼 마법 파티클 연구소 🌟</title>
+    <title>3D 슈퍼 마법 파티클 연구소 🌟</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #010103; color: #fff; font-family: "Pretendard", -apple-system, sans-serif; }
-        canvas { display: block; touch-action: none; cursor: crosshair; }
+        body { margin: 0; overflow: hidden; background: #000; color: #fff; font-family: "Pretendard", -apple-system, sans-serif; }
+        canvas { display: block; touch-action: none; }
         .glass-ui {
             background: rgba(10, 10, 25, 0.85);
             backdrop-filter: blur(25px);
@@ -29,8 +30,8 @@
 
     <!-- UI 상단 -->
     <div class="fixed top-6 left-1/2 -translate-x-1/2 z-10 w-[95%] max-w-5xl text-center pointer-events-none">
-        <h1 class="text-3xl font-black mb-1 tracking-tighter drop-shadow-2xl italic">✨ SUPER MAGIC ✨</h1>
-        <p class="text-white/60 text-[10px] uppercase tracking-[0.3em] mb-4">입체적인 마법 사운드와 함께 파티클을 스폰하세요</p>
+        <h1 class="text-3xl font-black mb-1 tracking-tighter drop-shadow-2xl italic">✨ 3D SUPER MAGIC ✨</h1>
+        <p class="text-white/60 text-[10px] uppercase tracking-[0.3em] mb-4">크고 화려해진 마법 파티클을 경험하세요</p>
         
         <div class="glass-ui p-3 rounded-[2rem] flex flex-wrap justify-center gap-2 pointer-events-auto">
             <button onclick="setMode('fireworks')" id="btn-fireworks" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold active">🎆 대폭발</button>
@@ -48,147 +49,323 @@
 
     <button onclick="toggleMute()" id="audio-toggle" class="fixed bottom-8 right-8 z-10 glass-ui w-14 h-14 rounded-full flex items-center justify-center text-2xl transition-all hover:scale-110 active:scale-90 shadow-2xl">🔊</button>
 
-    <canvas id="canvas"></canvas>
+    <div id="container"></div>
 
     <script>
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        let magicParticles = [];   
+        // --- 3D 엔진 설정 (Three.js) ---
+        let scene, camera, renderer, ambientParticlesGroup, magicParticlesGroup;
         let ambientParticles = []; 
+        let magicParticles = [];   
+        const mouse3D = new THREE.Vector3();
+        const mouse2D = new THREE.Vector2();
         let mode = 'fireworks';
         let soundEnabled = true;
-        const mouse = { x: -1000, y: -1000, radius: 50, pressed: false };
+        let isPressed = false;
         let lastSoundTime = 0;
 
-        // --- 고해상도 마법 사운드 엔진 ---
+        // 하트 모양 정의 (Bezier Curve)
+        const heartShape = new THREE.Shape();
+        heartShape.moveTo(0, 5);
+        heartShape.bezierCurveTo(0, 5, -5, 12, -12, 12);
+        heartShape.bezierCurveTo(-20, 12, -20, 0, -20, 0);
+        heartShape.bezierCurveTo(-20, -10, -12, -18, 0, -28);
+        heartShape.bezierCurveTo(12, -18, 20, -10, 20, 0);
+        heartShape.bezierCurveTo(20, 0, 20, 12, 12, 12);
+        heartShape.bezierCurveTo(5, 12, 0, 5, 0, 5);
+
+        const petalShape = new THREE.Shape();
+        petalShape.moveTo(0, 0);
+        petalShape.bezierCurveTo(5, 5, 10, 15, 0, 25);
+        petalShape.bezierCurveTo(-10, 15, -5, 5, 0, 0);
+
+        const snowShape = new THREE.Shape();
+        snowShape.moveTo(-1, 10); snowShape.lineTo(1, 10); snowShape.lineTo(1, 1);
+        snowShape.lineTo(10, 1); snowShape.lineTo(10, -1); snowShape.lineTo(1, -1);
+        snowShape.lineTo(1, -10); snowShape.lineTo(-1, -10); snowShape.lineTo(-1, -1);
+        snowShape.lineTo(-10, -1); snowShape.lineTo(-10, 1); snowShape.lineTo(-1, 1);
+        snowShape.lineTo(-1, 10);
+
+        // --- 사운드 엔진 ---
         let audioCtx;
         function initAudio() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             if (audioCtx.state === 'suspended') audioCtx.resume();
         }
 
-        // 공용 노이즈 생성 (텍스처 소리용)
         function playNoise(duration, volume, filterType, filterFreq) {
             const bufferSize = audioCtx.sampleRate * duration;
             const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
             const data = buffer.getChannelData(0);
             for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-
             const noise = audioCtx.createBufferSource();
             noise.buffer = buffer;
-
             const filter = audioCtx.createBiquadFilter();
             filter.type = filterType;
             filter.frequency.setValueAtTime(filterFreq, audioCtx.currentTime);
-
             const gain = audioCtx.createGain();
             gain.gain.setValueAtTime(volume, audioCtx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-
-            noise.connect(filter);
-            filter.connect(gain);
-            gain.connect(audioCtx.destination);
+            noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
             noise.start();
         }
 
         function playMagicSound(type, intensity = 1.0) {
             if (!soundEnabled || !audioCtx) return;
             const now = audioCtx.currentTime;
-            if (now - lastSoundTime < 0.04) return; 
+            if (now - lastSoundTime < 0.04) return;
             lastSoundTime = now;
-
             const gain = audioCtx.createGain();
             gain.connect(audioCtx.destination);
-
             switch(type) {
-                case 'fireworks': // 펑! (저음 타격 + 노이즈)
+                case 'fireworks':
                     const fOsc = audioCtx.createOscillator();
                     fOsc.frequency.setValueAtTime(150, now);
-                    fOsc.frequency.exponentialRampToValueAtTime(40, now + 0.1);
+                    fOsc.frequency.exponentialRampToValueAtTime(40, now + 0.15);
                     gain.gain.setValueAtTime(0.3 * intensity, now);
-                    fOsc.connect(gain);
-                    fOsc.start(); fOsc.stop(now + 0.15);
+                    fOsc.connect(gain); fOsc.start(); fOsc.stop(now + 0.15);
                     playNoise(0.2, 0.05, 'lowpass', 1000);
                     break;
-
-                case 'hearts': // 뾰롱 (부드러운 하프 느낌)
-                    const hOsc = audioCtx.createOscillator();
-                    hOsc.type = 'sine';
-                    hOsc.frequency.setValueAtTime(523.25, now);
-                    hOsc.frequency.exponentialRampToValueAtTime(1046.5, now + 0.3);
-                    gain.gain.setValueAtTime(0.1 * intensity, now);
-                    hOsc.connect(gain);
-                    hOsc.start(); hOsc.stop(now + 0.3);
-                    break;
-
-                case 'stars': // 칭~ (금속성 팅글)
-                    const sOsc = audioCtx.createOscillator();
-                    sOsc.type = 'triangle';
-                    sOsc.frequency.setValueAtTime(2000, now);
-                    sOsc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
-                    gain.gain.setValueAtTime(0.05 * intensity, now);
-                    sOsc.connect(gain);
-                    sOsc.start(); sOsc.stop(now + 0.1);
-                    break;
-
-                case 'lightning': // 지직! (거친 노이즈)
-                    playNoise(0.08, 0.15 * intensity, 'highpass', 2000);
-                    const lOsc = audioCtx.createOscillator();
-                    lOsc.type = 'square';
-                    lOsc.frequency.setValueAtTime(80, now);
-                    lOsc.connect(gain);
-                    gain.gain.setValueAtTime(0.05, now);
-                    lOsc.start(); lOsc.stop(now + 0.08);
-                    break;
-
-                case 'snow': // 사각사각 (고역 노이즈)
-                    playNoise(0.3, 0.03 * intensity, 'highpass', 5000);
-                    break;
-
-                case 'petals': // 쉬익 (부드러운 바람)
-                    playNoise(0.4, 0.02 * intensity, 'bandpass', 1500);
-                    break;
-
-                case 'bubbles': // 퐁! (물방울 파열음)
+                case 'lightning': playNoise(0.08, 0.15 * intensity, 'highpass', 2000); break;
+                case 'bubbles':
                     const bOsc = audioCtx.createOscillator();
-                    bOsc.frequency.setValueAtTime(800, now);
-                    bOsc.frequency.exponentialRampToValueAtTime(2500, now + 0.04);
+                    bOsc.frequency.setValueAtTime(1000, now);
+                    bOsc.frequency.exponentialRampToValueAtTime(2500, now + 0.05);
                     gain.gain.setValueAtTime(0.12 * intensity, now);
-                    bOsc.connect(gain);
-                    bOsc.start(); bOsc.stop(now + 0.05);
+                    bOsc.connect(gain); bOsc.start(); bOsc.stop(now + 0.08);
                     break;
-
-                case 'vortex': // 위잉~ (필터 스윕)
-                    const vOsc = audioCtx.createOscillator();
-                    vOsc.type = 'sawtooth';
-                    vOsc.frequency.setValueAtTime(200, now);
-                    const vFilter = audioCtx.createBiquadFilter();
-                    vFilter.frequency.setValueAtTime(100, now);
-                    vFilter.frequency.exponentialRampToValueAtTime(2000, now + 0.2);
-                    vOsc.connect(vFilter);
-                    vFilter.connect(gain);
-                    gain.gain.setValueAtTime(0.03 * intensity, now);
-                    vOsc.start(); vOsc.stop(now + 0.2);
-                    break;
-
-                case 'blackhole': // 우우웅... (저음 흡입)
+                case 'blackhole':
                     const bhOsc = audioCtx.createOscillator();
-                    bhOsc.frequency.setValueAtTime(100, now);
-                    bhOsc.frequency.linearRampToValueAtTime(10, now + 0.5);
-                    gain.gain.setValueAtTime(0.2 * intensity, now);
-                    bhOsc.connect(gain);
-                    bhOsc.start(); bhOsc.stop(now + 0.5);
+                    bhOsc.frequency.setValueAtTime(120, now);
+                    bhOsc.frequency.linearRampToValueAtTime(5, now + 0.4);
+                    gain.gain.setValueAtTime(0.25 * intensity, now);
+                    bhOsc.connect(gain); bhOsc.start(); bhOsc.stop(now + 0.4);
                     break;
-
-                case 'rainbow': // 멜로딕 (랜덤 피치)
-                    const rOsc = audioCtx.createOscillator();
-                    rOsc.frequency.setValueAtTime(400 + Math.random() * 800, now);
-                    gain.gain.setValueAtTime(0.06 * intensity, now);
-                    rOsc.connect(gain);
-                    rOsc.start(); rOsc.stop(now + 0.1);
-                    break;
+                default:
+                    const mOsc = audioCtx.createOscillator();
+                    mOsc.type = 'triangle';
+                    mOsc.frequency.setValueAtTime(type === 'hearts' ? 660 : 1200, now);
+                    gain.gain.setValueAtTime(0.07 * intensity, now);
+                    mOsc.connect(gain); mOsc.start(); mOsc.stop(now + 0.15);
             }
+        }
+
+        // --- 파티클 시스템 ---
+        class MagicParticle {
+            constructor(pos, isMagic = false) {
+                this.isMagic = isMagic;
+                this.life = 1.0;
+                this.decay = isMagic ? (Math.random() * 0.01 + 0.008) : 0; // 수명 조금 더 길게
+                
+                // 크기 대폭 상향 (타격감 피드백)
+                const sizeBase = isMagic ? Math.random() * 8 + 6 : Math.random() * 2 + 1;
+                let geometry;
+                
+                if (isMagic) {
+                    switch(mode) {
+                        case 'hearts': geometry = new THREE.ShapeGeometry(heartShape); break;
+                        case 'stars': geometry = new THREE.OctahedronGeometry(sizeBase, 0); break;
+                        case 'lightning': geometry = new THREE.TetrahedronGeometry(sizeBase, 0); break;
+                        case 'snow': geometry = new THREE.ShapeGeometry(snowShape); break;
+                        case 'petals': geometry = new THREE.ShapeGeometry(petalShape); break;
+                        case 'bubbles': geometry = new THREE.SphereGeometry(sizeBase, 16, 16); break;
+                        case 'vortex': geometry = new THREE.CylinderGeometry(0.1, sizeBase, sizeBase*2, 6); break;
+                        case 'blackhole': geometry = new THREE.TorusGeometry(sizeBase, sizeBase*0.3, 8, 16); break;
+                        case 'rainbow': geometry = new THREE.DodecahedronGeometry(sizeBase, 0); break;
+                        default: geometry = new THREE.SphereGeometry(sizeBase, 8, 8);
+                    }
+                } else {
+                    geometry = new THREE.SphereGeometry(sizeBase, 4, 4);
+                }
+                
+                let color;
+                if (isMagic) {
+                    const r = Math.random;
+                    switch(mode) {
+                        case 'hearts': color = new THREE.Color(`hsl(${r() * 20 + 340}, 100%, 75%)`); break;
+                        case 'stars': color = new THREE.Color(`hsl(${r() * 15 + 45}, 100%, 75%)`); break;
+                        case 'bubbles': color = new THREE.Color(`hsla(${r() * 40 + 190}, 100%, 90%, 0.9)`); break;
+                        case 'rainbow': color = new THREE.Color(`hsl(${r() * 360}, 100%, 65%)`); break;
+                        default: color = new THREE.Color(`hsl(${r() * 360}, 100%, 70%)`);
+                    }
+                } else {
+                    const h = Math.random() > 0.5 ? 260 : 320;
+                    color = new THREE.Color(`hsl(${h}, 95%, 65%)`);
+                }
+
+                const materialOptions = { 
+                    color: color, 
+                    transparent: true, 
+                    opacity: isMagic ? 1 : 0.8,
+                    side: THREE.DoubleSide
+                };
+
+                if (isMagic && mode === 'bubbles') {
+                    materialOptions.wireframe = true;
+                    materialOptions.opacity = 0.7;
+                    materialOptions.color = new THREE.Color(0xffffff);
+                }
+
+                const material = new THREE.MeshBasicMaterial(materialOptions);
+                this.mesh = new THREE.Mesh(geometry, material);
+                this.mesh.position.copy(pos);
+
+                // 하트는 거꾸로 생성되므로 보정
+                if (isMagic && mode === 'hearts') this.mesh.rotation.z = Math.PI;
+
+                // 물리 초기화
+                const r = Math.random;
+                const angle = r() * Math.PI * 2;
+                const phi = r() * Math.PI;
+                // 초기 속도 강화
+                const force = isMagic ? (r() * 12 + 6) : (r() * 1.5 + 0.5);
+                
+                this.velocity = new THREE.Vector3(
+                    Math.sin(phi) * Math.cos(angle) * force,
+                    Math.sin(phi) * Math.sin(angle) * force,
+                    Math.cos(phi) * force
+                );
+                
+                // 대폭발 중력 복구
+                this.gravity = (isMagic && mode === 'fireworks') ? -0.2 : 0;
+                if (isMagic && (mode === 'bubbles' || mode === 'hearts' || mode === 'snow')) this.gravity = 0.08; 
+
+                this.friction = 0.96;
+                this.angleOffset = r() * Math.PI * 2;
+                this.rotationSpeed = new THREE.Vector3(r()*0.2, r()*0.2, r()*0.2);
+            }
+
+            update() {
+                if (this.isMagic) {
+                    this.life -= this.decay;
+                    this.mesh.material.opacity = Math.max(0, this.life);
+                    
+                    this.mesh.rotation.x += this.rotationSpeed.x;
+                    this.mesh.rotation.y += this.rotationSpeed.y;
+                    this.mesh.rotation.z += this.rotationSpeed.z;
+
+                    if (mode === 'vortex') {
+                        const vec = new THREE.Vector3().subVectors(mouse3D, this.mesh.position);
+                        const dist = vec.length();
+                        if (dist < 350) {
+                            const axis = new THREE.Vector3(0, 1, 0);
+                            this.velocity.applyAxisAngle(axis, 0.2); 
+                            this.velocity.add(vec.normalize().multiplyScalar(0.6));
+                        }
+                    } else if (mode === 'blackhole') {
+                        const vec = new THREE.Vector3().subVectors(mouse3D, this.mesh.position);
+                        const dist = vec.length();
+                        if (dist > 5) {
+                            this.velocity.add(vec.normalize().multiplyScalar(1.5));
+                            if (dist < 60) {
+                                this.mesh.scale.multiplyScalar(0.92);
+                                this.velocity.applyAxisAngle(new THREE.Vector3(0,0,1), 0.5);
+                            }
+                        }
+                    }
+
+                    this.velocity.y += this.gravity;
+                    this.mesh.position.add(this.velocity);
+                    this.velocity.multiplyScalar(this.friction);
+                } else {
+                    this.mesh.position.add(this.velocity);
+                    this.velocity.x += Math.cos(Date.now() * 0.0008 + this.angleOffset) * 0.01;
+                    this.velocity.y += Math.sin(Date.now() * 0.0008 + this.angleOffset) * 0.01;
+                    this.velocity.multiplyScalar(0.995);
+                    if (Math.abs(this.mesh.position.x) > 1000) this.velocity.x *= -1;
+                    if (Math.abs(this.mesh.position.y) > 600) this.velocity.y *= -1;
+                    if (Math.abs(this.mesh.position.z) > 600) this.velocity.z *= -1;
+                }
+            }
+        }
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 5000);
+            camera.position.z = 700;
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.getElementById('container').appendChild(renderer.domElement);
+            ambientParticlesGroup = new THREE.Group();
+            magicParticlesGroup = new THREE.Group();
+            scene.add(ambientParticlesGroup);
+            scene.add(magicParticlesGroup);
+            ambientParticles = [];
+            magicParticles = [];
+            for (let i = 0; i < 800; i++) {
+                const pos = new THREE.Vector3((Math.random()-0.5)*2000,(Math.random()-0.5)*1200,(Math.random()-0.5)*1200);
+                const p = new MagicParticle(pos, false);
+                ambientParticlesGroup.add(p.mesh);
+                ambientParticles.push(p);
+            }
+            window.addEventListener('resize', onWindowResize);
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mousedown', onMouseDown);
+            document.addEventListener('mouseup', onMouseUp);
+            document.addEventListener('touchstart', onTouchStart, { passive: false });
+            document.addEventListener('touchmove', onTouchMove, { passive: false });
+            document.addEventListener('touchend', onMouseUp);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function updateMouse3D() {
+            const vector = new THREE.Vector3(mouse2D.x, mouse2D.y, 0.5);
+            vector.unproject(camera);
+            const dir = vector.sub(camera.position).normalize();
+            const distance = -camera.position.z / dir.z;
+            mouse3D.copy(camera.position).add(dir.multiplyScalar(distance));
+        }
+
+        function onMouseMove(e) {
+            mouse2D.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse2D.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            updateMouse3D();
+            if (isPressed) spawnMagic(false);
+        }
+
+        function onMouseDown(e) {
+            initAudio(); isPressed = true; onMouseMove(e); spawnMagic(true);
+        }
+
+        function onMouseUp() { isPressed = false; }
+
+        function onTouchStart(e) {
+            e.preventDefault(); initAudio(); isPressed = true;
+            updateTouch(e); spawnMagic(true);
+        }
+
+        function onTouchMove(e) {
+            e.preventDefault(); updateTouch(e);
+            if (isPressed) spawnMagic(false);
+        }
+
+        function updateTouch(e) {
+            const touch = e.touches[0];
+            mouse2D.x = (touch.clientX / window.innerWidth) * 2 - 1;
+            mouse2D.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+            updateMouse3D();
+        }
+
+        function spawnMagic(isClick = false) {
+            playMagicSound(mode, isClick ? 1.0 : 0.75);
+            const count = isClick ? 100 : 25;
+            for (let i = 0; i < count; i++) {
+                const p = new MagicParticle(mouse3D, true);
+                magicParticlesGroup.add(p.mesh);
+                magicParticles.push(p);
+            }
+        }
+
+        function setMode(newMode) {
+            mode = newMode;
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn-' + newMode).classList.add('active');
+            initAudio(); playMagicSound(newMode, 1.4);
         }
 
         function toggleMute() {
@@ -196,215 +373,25 @@
             const btn = document.getElementById('audio-toggle');
             btn.textContent = soundEnabled ? '🔊' : '🔇';
             btn.style.opacity = soundEnabled ? '1' : '0.5';
-            if(soundEnabled) { initAudio(); playMagicSound('stars'); }
-        }
-
-        // --- 파티클 클래스 ---
-        class Particle {
-            constructor(x, y, isMagic = false) {
-                this.x = x; this.y = y; this.isMagic = isMagic;
-                this.life = 1.0;
-                this.decay = isMagic ? (Math.random() * 0.02 + 0.012) : 0;
-                this.baseX = x; this.baseY = y;
-                this.initPhysics();
-            }
-
-            initPhysics() {
-                const r = Math.random;
-                const angle = r() * Math.PI * 2;
-                const force = this.isMagic ? (r() * 9 + 2) : (r() * 0.4);
-                
-                this.vx = Math.cos(angle) * force;
-                this.vy = Math.sin(angle) * force;
-                this.gravity = 0;
-                this.friction = 0.96;
-                this.size = this.isMagic ? r() * 4 + 2 : r() * 1.2 + 0.4;
-
-                if (this.isMagic) {
-                    switch(mode) {
-                        case 'fireworks': this.gravity = 0.2; this.color = `hsl(${r() * 360}, 100%, 65%)`; break;
-                        case 'hearts': this.vy = -(r() * 4 + 2); this.color = `hsl(${r() * 20 + 340}, 95%, 75%)`; break;
-                        case 'stars': this.color = `hsl(${r() * 15 + 45}, 100%, 60%)`; break;
-                        case 'lightning': this.vx *= 3; this.vy *= 3; this.decay = 0.1; this.color = '#fff'; break;
-                        case 'snow': this.vy = r() * 2 + 0.5; this.vx = (r() - 0.5) * 1.5; this.color = '#fff'; break;
-                        case 'petals': this.vy = r() * 1.2 + 0.5; this.color = `hsl(${r() * 20 + 330}, 80%, 85%)`; break;
-                        case 'bubbles': this.vy = -(r() * 2.5 + 1); this.color = `hsla(${r() * 40 + 190}, 85%, 85%, 0.7)`; break;
-                        case 'blackhole': this.vx *= 0.5; this.vy *= 0.5; this.color = `hsl(${r() * 60 + 240}, 100%, 60%)`; break;
-                        case 'vortex': this.color = `hsl(${r() * 30 + 160}, 100%, 70%)`; break;
-                        case 'rainbow': this.hue = r() * 360; this.color = `hsl(${this.hue}, 100%, 60%)`; break;
-                    }
-                } else {
-                    this.color = 'rgba(255,255,255,0.2)';
-                    this.angle = Math.random() * Math.PI * 2;
-                }
-            }
-
-            draw() {
-                ctx.save();
-                ctx.globalAlpha = this.life;
-                ctx.fillStyle = this.color;
-                ctx.translate(this.x, this.y);
-                const s = this.size;
-
-                if (this.isMagic) {
-                    if (mode === 'hearts') {
-                        const h = s * 3.5;
-                        ctx.beginPath();
-                        ctx.moveTo(0, h * 0.3);
-                        ctx.bezierCurveTo(-h * 0.5, -h * 0.3, -h, h * 0.1, 0, h * 0.8);
-                        ctx.bezierCurveTo(h, h * 0.1, h * 0.5, -h * 0.3, 0, h * 0.3);
-                        ctx.fill();
-                    } else if (mode === 'stars') {
-                        const r = s * 4.5;
-                        ctx.beginPath();
-                        for(let i=0; i<5; i++) {
-                            ctx.lineTo(Math.cos((18+i*72)/180*Math.PI)*r, -Math.sin((18+i*72)/180*Math.PI)*r);
-                            ctx.lineTo(Math.cos((54+i*72)/180*Math.PI)*r/2, -Math.sin((54+i*72)/180*Math.PI)*r/2);
-                        }
-                        ctx.fill();
-                    } else if (mode === 'snow') {
-                        ctx.beginPath(); ctx.arc(0,0, s*2, 0, Math.PI*2); ctx.fill();
-                    } else if (mode === 'bubbles') {
-                        ctx.strokeStyle = this.color; ctx.lineWidth = 1.2;
-                        ctx.beginPath(); ctx.arc(0,0, s*5, 0, Math.PI*2); ctx.stroke();
-                        ctx.fillStyle = "rgba(255,255,255,0.3)";
-                        ctx.beginPath(); ctx.arc(-s*1.5, -s*1.5, s, 0, Math.PI*2); ctx.fill();
-                    } else {
-                        ctx.beginPath(); ctx.arc(0,0, s*2.2, 0, Math.PI*2); ctx.fill();
-                    }
-                } else {
-                    ctx.beginPath(); ctx.arc(0, 0, s, 0, Math.PI * 2); ctx.fill();
-                }
-                ctx.restore();
-            }
-
-            update() {
-                if (this.isMagic) {
-                    this.life -= this.decay;
-                    
-                    if (mode === 'vortex') {
-                        const dx = mouse.x - this.x;
-                        const dy = mouse.y - this.y;
-                        const dist = Math.sqrt(dx*dx + dy*dy);
-                        if (dist < 150) { // 반경 최적화
-                            const force = (150 - dist) / 150;
-                            this.vx += dy * 0.12 * force; 
-                            this.vy -= dx * 0.12 * force;
-                            this.vx += dx * 0.05 * force; 
-                            this.vy += dy * 0.05 * force;
-                        }
-                    } else if (mode === 'blackhole') {
-                        const dx = mouse.x - this.x;
-                        const dy = mouse.y - this.y;
-                        const dist = Math.sqrt(dx*dx + dy*dy);
-                        if (dist > 5) {
-                            const pull = 2.5 / (dist * 0.05 + 1);
-                            this.vx += dx / dist * pull;
-                            this.vy += dy / dist * pull;
-                            if (dist < 40) {
-                                this.vx += dy * 0.3;
-                                this.vy -= dx * 0.3;
-                                this.size *= 0.94;
-                            }
-                        }
-                    }
-
-                    this.vy += this.gravity;
-                    this.x += this.vx;
-                    this.y += this.vy;
-                    this.vx *= this.friction;
-                    this.vy *= this.friction;
-
-                    if (mode === 'rainbow') {
-                        this.hue = (this.hue + 10) % 360;
-                        this.color = `hsl(${this.hue}, 100%, 65%)`;
-                    }
-                } else {
-                    this.x += this.vx + Math.cos(this.angle) * 0.1;
-                    this.y += this.vy + Math.sin(this.angle) * 0.1;
-                    this.angle += 0.02;
-                    this.vx *= 0.96; this.vy *= 0.96;
-                    this.vx -= (this.x - this.baseX) / 200;
-                    this.vy -= (this.y - this.baseY) / 200;
-                }
-            }
-        }
-
-        // --- 핵심 인터랙션 ---
-        function spawnMagic(isClick = false) {
-            initAudio();
-            playMagicSound(mode, isClick ? 1.0 : 0.6);
-            
-            const count = isClick ? 65 : 15;
-            for (let i = 0; i < count; i++) {
-                magicParticles.push(new Particle(mouse.x, mouse.y, true));
-            }
-            
-            ambientParticles.forEach(p => {
-                const dx = mouse.x - p.x; const dy = mouse.y - p.y;
-                const d = Math.sqrt(dx*dx + dy*dy);
-                if (d < 100) {
-                    const f = (100 - d) / 100;
-                    const pwr = isClick ? 45 : 15;
-                    p.vx -= (dx / d) * f * pwr;
-                    p.vy -= (dy / d) * f * pwr;
-                }
-            });
-        }
-
-        function init() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            ambientParticles = [];
-            magicParticles = [];
-            let qty = (canvas.width * canvas.height) / 1000;
-            for (let i = 0; i < qty; i++) {
-                ambientParticles.push(new Particle(Math.random() * canvas.width, Math.random() * canvas.height, false));
-            }
-        }
-
-        const updatePos = (e) => {
-            const x = e.clientX || (e.touches && e.touches[0].clientX);
-            const y = e.clientY || (e.touches && e.touches[0].clientY);
-            if(x) { mouse.x = x; mouse.y = y; }
-        };
-
-        window.addEventListener('mousedown', (e) => { mouse.pressed = true; updatePos(e); spawnMagic(true); });
-        window.addEventListener('mousemove', (e) => { updatePos(e); if(mouse.pressed) spawnMagic(false); });
-        window.addEventListener('mouseup', () => mouse.pressed = false);
-        window.addEventListener('touchstart', (e) => { e.preventDefault(); mouse.pressed = true; updatePos(e); spawnMagic(true); });
-        window.addEventListener('touchmove', (e) => { e.preventDefault(); updatePos(e); if(mouse.pressed) spawnMagic(false); });
-        window.addEventListener('touchend', () => mouse.pressed = false);
-
-        function setMode(newMode) {
-            mode = newMode;
-            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById('btn-' + newMode).classList.add('active');
-            initAudio(); playMagicSound(newMode, 1.2);
         }
 
         function animate() {
-            if (['vortex', 'fireworks', 'lightning', 'blackhole'].includes(mode)) {
-                ctx.fillStyle = 'rgba(1, 1, 3, 0.22)';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-            } else {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-            }
-
-            ambientParticles.forEach(p => { p.update(); p.draw(); });
-            
+            requestAnimationFrame(animate);
+            camera.position.x += (mouse2D.x * 150 - camera.position.x) * 0.05;
+            camera.position.y += (mouse2D.y * 150 - camera.position.y) * 0.05;
+            camera.lookAt(scene.position);
+            ambientParticles.forEach(p => p.update());
             for (let i = magicParticles.length - 1; i >= 0; i--) {
                 const p = magicParticles[i];
                 p.update();
-                p.draw();
-                if (p.life <= 0) magicParticles.splice(i, 1);
+                if (p.life <= 0) {
+                    magicParticlesGroup.remove(p.mesh);
+                    magicParticles.splice(i, 1);
+                }
             }
-            
-            if (magicParticles.length > 1800) magicParticles.splice(0, 40);
-            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
         }
 
-        window.addEventListener('resize', init);
         init();
         animate();
     </script>
