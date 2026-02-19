@@ -22,37 +22,42 @@
             box-shadow: 0 0 25px rgba(236, 72, 153, 0.6);
             border-color: rgba(255, 255, 255, 0.6);
         }
-        .mode-btn { transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); border: 1px solid rgba(255,255,255,0.1); }
+        .mode-btn { 
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); 
+            border: 1px solid rgba(255,255,255,0.1);
+            /* Better touch feedback on mobile */
+            -webkit-tap-highlight-color: transparent;
+        }
         .mode-btn:active { transform: scale(0.95); }
     </style>
 </head>
 <body>
 
-    <!-- UI 상단 -->
-    <div class="fixed top-6 left-1/2 -translate-x-1/2 z-10 w-[95%] max-w-5xl text-center pointer-events-none">
+    <!-- UI Top: Higher Z-index to ensure touch priority -->
+    <div class="fixed top-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-5xl text-center pointer-events-none">
         <h1 class="text-3xl font-black mb-1 tracking-tighter drop-shadow-2xl italic">✨ 3D SUPER MAGIC ✨</h1>
         <p class="text-white/60 text-[10px] uppercase tracking-[0.3em] mb-4">드래그 리듬에 맞춰 변하는 부드러운 마법 사운드</p>
         
         <div class="glass-ui p-3 rounded-[2rem] flex flex-wrap justify-center gap-2 pointer-events-auto">
             <button onclick="setMode('fireworks')" id="btn-fireworks" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold active">🎆 대폭발</button>
-            <button onclick="setMode('hearts')" id="btn-hearts" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">💖 핑크하트</button>
-            <button onclick="setMode('stars')" id="btn-stars" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">⭐ 황금별빛</button>
-            <button onclick="setMode('lightning')" id="btn-lightning" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">⚡ 푸른번개</button>
-            <button onclick="setMode('snow')" id="btn-snow" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">❄️ 눈송이</button>
+            <button onclick="setMode('hearts')" id="btn-hearts" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">💖 하트</button>
+            <button onclick="setMode('stars')" id="btn-stars" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">⭐ 별빛</button>
+            <button onclick="setMode('lightning')" id="btn-lightning" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">⚡ 번개</button>
+            <button onclick="setMode('snow')" id="btn-snow" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">❄️ 눈</button>
             <button onclick="setMode('petals')" id="btn-petals" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🌸 꽃잎</button>
-            <button onclick="setMode('bubbles')" id="btn-bubbles" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🫧 비눗방울</button>
+            <button onclick="setMode('bubbles')" id="btn-bubbles" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🫧 방울</button>
             <button onclick="setMode('vortex')" id="btn-vortex" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🌪️ 소용돌이</button>
             <button onclick="setMode('blackhole')" id="btn-blackhole" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🌀 블랙홀</button>
             <button onclick="setMode('rainbow')" id="btn-rainbow" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🌈 무지개</button>
         </div>
     </div>
 
-    <button onclick="toggleMute()" id="audio-toggle" class="fixed bottom-8 right-8 z-10 glass-ui w-14 h-14 rounded-full flex items-center justify-center text-2xl transition-all hover:scale-110 active:scale-90 shadow-2xl">🔊</button>
+    <button onclick="toggleMute()" id="audio-toggle" class="fixed bottom-8 right-8 z-50 glass-ui w-14 h-14 rounded-full flex items-center justify-center text-2xl transition-all hover:scale-110 active:scale-90 shadow-2xl pointer-events-auto">🔊</button>
 
     <div id="container"></div>
 
     <script>
-        // --- 3D 엔진 설정 (Three.js) ---
+        // --- 3D Engine Setup ---
         let scene, camera, renderer, ambientParticlesGroup, magicParticlesGroup;
         let ambientParticles = []; 
         let magicParticles = [];   
@@ -62,6 +67,9 @@
         let soundEnabled = true;
         let isPressed = false;
         let lastSoundTime = 0;
+
+        // Performance Safety: Max particle count
+        const MAX_PARTICLES = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? 400 : 1200;
 
         const heartShape = new THREE.Shape();
         heartShape.moveTo(0, 5);
@@ -84,7 +92,7 @@
         snowShape.lineTo(-10, -1); snowShape.lineTo(-10, 1); snowShape.lineTo(-1, 1);
         snowShape.lineTo(-1, 10);
 
-        // --- 사운드 엔진 (맥락 중심 사운드 디자인) ---
+        // --- Sound Engine ---
         let audioCtx;
         function initAudio() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -92,6 +100,7 @@
         }
 
         function playSoftNoise(duration, volume, freq) {
+            if (!audioCtx) return;
             const bufferSize = audioCtx.sampleRate * duration;
             const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
             const data = buffer.getChannelData(0);
@@ -111,15 +120,12 @@
         function playMagicSound(type, isClick = false) {
             if (!soundEnabled || !audioCtx) return;
             const now = audioCtx.currentTime;
-            
-            // 드래그 중에는 소리 트리거 간격을 훨씬 길게 하여 '웅성거림' 방지
             const interval = isClick ? 0.05 : 0.25; 
             if (now - lastSoundTime < interval) return;
             lastSoundTime = now;
 
             const masterGain = audioCtx.createGain();
             masterGain.connect(audioCtx.destination);
-            // 드래그 시 볼륨을 아주 미세하게 설정
             const vol = isClick ? 0.15 : 0.04;
 
             switch(type) {
@@ -133,27 +139,19 @@
                     break;
                 }
                 case 'hearts': {
-                    // 핑크하트: 부드럽고 따뜻한 울림 (FM 합성 느낌)
                     const carrier = audioCtx.createOscillator();
                     const modulator = audioCtx.createOscillator();
                     const modGain = audioCtx.createGain();
-
-                    carrier.type = 'sine';
-                    modulator.type = 'sine';
-                    
-                    const baseFreq = isClick ? 349.23 : 261.63 + (Math.random() * 5); // F4 vs C4
+                    carrier.type = 'sine'; modulator.type = 'sine';
+                    const baseFreq = isClick ? 349.23 : 261.63 + (Math.random() * 5);
                     carrier.frequency.setValueAtTime(baseFreq, now);
                     modulator.frequency.setValueAtTime(baseFreq * 2, now);
                     modGain.gain.setValueAtTime(baseFreq * 0.5, now);
-
-                    modulator.connect(modGain);
-                    modGain.connect(carrier.frequency);
+                    modulator.connect(modGain); modGain.connect(carrier.frequency);
                     carrier.connect(masterGain);
-
                     masterGain.gain.setValueAtTime(0, now);
-                    masterGain.gain.linearRampToValueAtTime(vol, now + 0.05); // 어택 부드럽게
+                    masterGain.gain.linearRampToValueAtTime(vol, now + 0.05);
                     masterGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
-
                     carrier.start(); modulator.start();
                     carrier.stop(now + 0.5); modulator.stop(now + 0.5);
                     break;
@@ -167,18 +165,9 @@
                     osc.connect(masterGain); osc.start(); osc.stop(now + 0.2);
                     break;
                 }
-                case 'lightning': {
-                    playSoftNoise(0.1, vol * 1.5, 2000);
-                    break;
-                }
-                case 'snow': {
-                    playSoftNoise(0.4, vol * 0.4, 4000);
-                    break;
-                }
-                case 'petals': {
-                    playSoftNoise(0.6, vol * 0.3, 1000);
-                    break;
-                }
+                case 'lightning': playSoftNoise(0.1, vol * 1.5, 2000); break;
+                case 'snow': playSoftNoise(0.4, vol * 0.4, 4000); break;
+                case 'petals': playSoftNoise(0.6, vol * 0.3, 1000); break;
                 case 'bubbles': {
                     const osc = audioCtx.createOscillator();
                     osc.frequency.setValueAtTime(600, now);
@@ -229,23 +218,18 @@
             btn.style.opacity = soundEnabled ? '1' : '0.5';
         }
 
-        // --- 파티클 시스템 ---
+        // --- Particle System ---
         class MagicParticle {
             constructor(pos, isMagic = false) {
                 this.isMagic = isMagic;
                 this.life = 1.0;
                 this.decay = isMagic ? (Math.random() * 0.01 + 0.008) : 0; 
-                
                 const sizeBase = isMagic ? Math.random() * 8 + 8 : Math.random() * 2 + 1;
                 let geometry;
                 
                 if (isMagic) {
                     switch(mode) {
-                        case 'hearts': 
-                            geometry = new THREE.ExtrudeGeometry(heartShape, { 
-                                depth: 4, bevelEnabled: true, bevelThickness: 1, bevelSize: 1, bevelSegments: 3 
-                            }); 
-                            break;
+                        case 'hearts': geometry = new THREE.ExtrudeGeometry(heartShape, { depth: 4, bevelEnabled: true, bevelThickness: 1, bevelSize: 1, bevelSegments: 3 }); break;
                         case 'stars': geometry = new THREE.OctahedronGeometry(sizeBase, 0); break;
                         case 'lightning': geometry = new THREE.TetrahedronGeometry(sizeBase, 0); break;
                         case 'snow': geometry = new THREE.ShapeGeometry(snowShape); break;
@@ -281,22 +265,14 @@
                 const material = new THREE.MeshBasicMaterial(materialOptions);
                 this.mesh = new THREE.Mesh(geometry, material);
                 this.mesh.position.copy(pos);
-
                 if (isMagic && mode === 'hearts') this.mesh.rotation.z = Math.PI;
 
                 const angle = r() * Math.PI * 2;
                 const phi = r() * Math.PI;
                 const force = isMagic ? (r() * 12 + 6) : (r() * 1.5 + 0.5);
-                
-                this.velocity = new THREE.Vector3(
-                    Math.sin(phi) * Math.cos(angle) * force,
-                    Math.sin(phi) * Math.sin(angle) * force,
-                    Math.cos(phi) * force
-                );
-                
+                this.velocity = new THREE.Vector3(Math.sin(phi)*Math.cos(angle)*force, Math.sin(phi)*Math.sin(angle)*force, Math.cos(phi)*force);
                 this.gravity = (isMagic && mode === 'fireworks') ? -0.2 : 0;
                 if (isMagic && (mode === 'bubbles' || mode === 'hearts' || mode === 'snow')) this.gravity = 0.08; 
-
                 this.friction = 0.96;
                 this.angleOffset = r() * Math.PI * 2;
                 this.rotationSpeed = new THREE.Vector3(r()*0.2, r()*0.2, r()*0.2);
@@ -309,24 +285,13 @@
                     this.mesh.rotation.x += this.rotationSpeed.x;
                     this.mesh.rotation.y += this.rotationSpeed.y;
                     this.mesh.rotation.z += this.rotationSpeed.z;
-
                     if (mode === 'vortex') {
                         const vec = new THREE.Vector3().subVectors(mouse3D, this.mesh.position);
-                        const dist = vec.length();
-                        if (dist < 350) {
-                            const axis = new THREE.Vector3(0, 1, 0);
-                            this.velocity.applyAxisAngle(axis, 0.2); 
-                            this.velocity.add(vec.normalize().multiplyScalar(0.6));
-                        }
+                        if (vec.length() < 350) { this.velocity.applyAxisAngle(new THREE.Vector3(0, 1, 0), 0.2); this.velocity.add(vec.normalize().multiplyScalar(0.6)); }
                     } else if (mode === 'blackhole') {
                         const vec = new THREE.Vector3().subVectors(mouse3D, this.mesh.position);
-                        const dist = vec.length();
-                        if (dist > 5) {
-                            this.velocity.add(vec.normalize().multiplyScalar(1.5));
-                            if (dist < 60) { this.mesh.scale.multiplyScalar(0.92); this.velocity.applyAxisAngle(new THREE.Vector3(0,0,1), 0.5); }
-                        }
+                        if (vec.length() > 5) { this.velocity.add(vec.normalize().multiplyScalar(1.5)); if (vec.length() < 60) { this.mesh.scale.multiplyScalar(0.92); this.velocity.applyAxisAngle(new THREE.Vector3(0,0,1), 0.5); } }
                     }
-
                     this.velocity.y += this.gravity;
                     this.mesh.position.add(this.velocity);
                     this.velocity.multiplyScalar(this.friction);
@@ -348,15 +313,13 @@
             camera.position.z = 700;
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             document.getElementById('container').appendChild(renderer.domElement);
             ambientParticlesGroup = new THREE.Group();
             magicParticlesGroup = new THREE.Group();
             scene.add(ambientParticlesGroup);
             scene.add(magicParticlesGroup);
-            ambientParticles = [];
-            magicParticles = [];
-            for (let i = 0; i < 800; i++) {
+            for (let i = 0; i < 400; i++) { // Reduced count for mobile safety
                 const pos = new THREE.Vector3((Math.random()-0.5)*2000,(Math.random()-0.5)*1200,(Math.random()-0.5)*1200);
                 const p = new MagicParticle(pos, false);
                 ambientParticlesGroup.add(p.mesh);
@@ -372,8 +335,7 @@
         }
 
         function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
+            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
@@ -393,14 +355,30 @@
         }
 
         function onMouseDown(e) {
+            // Check if user clicked on a UI button
+            if (e.target.tagName === 'BUTTON') return;
             initAudio(); isPressed = true; onMouseMove(e); spawnMagic(true);
         }
 
         function onMouseUp() { isPressed = false; }
 
-        function onTouchStart(e) { e.preventDefault(); initAudio(); isPressed = true; updateTouch(e); spawnMagic(true); }
+        function onTouchStart(e) { 
+            // Crucial: Only prevent default if touching the canvas, not UI buttons
+            if (e.target.tagName === 'BUTTON') return;
+            
+            e.preventDefault(); 
+            initAudio(); 
+            isPressed = true; 
+            updateTouch(e); 
+            spawnMagic(true); 
+        }
 
-        function onTouchMove(e) { e.preventDefault(); updateTouch(e); if (isPressed) spawnMagic(false); }
+        function onTouchMove(e) { 
+            if (e.target.tagName === 'BUTTON') return;
+            e.preventDefault(); 
+            updateTouch(e); 
+            if (isPressed) spawnMagic(false); 
+        }
 
         function updateTouch(e) {
             if (e.touches.length > 0) {
@@ -413,8 +391,15 @@
 
         function spawnMagic(isClick = false) {
             playMagicSound(mode, isClick);
-            const count = isClick ? 100 : 25;
+            const count = isClick ? 60 : 15;
             for (let i = 0; i < count; i++) {
+                // Garbage collection for performance
+                if (magicParticles.length > MAX_PARTICLES) {
+                    const oldP = magicParticles.shift();
+                    magicParticlesGroup.remove(oldP.mesh);
+                    if(oldP.mesh.geometry) oldP.mesh.geometry.dispose();
+                    if(oldP.mesh.material) oldP.mesh.material.dispose();
+                }
                 const p = new MagicParticle(mouse3D, true);
                 magicParticlesGroup.add(p.mesh);
                 magicParticles.push(p);
@@ -425,18 +410,18 @@
             mode = newMode;
             document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('btn-' + newMode).classList.add('active');
-            initAudio(); playMagicSound(newMode, true);
+            initAudio(); 
+            playMagicSound(newMode, true);
         }
 
         function animate() {
             requestAnimationFrame(animate);
-            camera.position.x += (mouse2D.x * 150 - camera.position.x) * 0.05;
-            camera.position.y += (mouse2D.y * 150 - camera.position.y) * 0.05;
+            camera.position.x += (mouse2D.x * 100 - camera.position.x) * 0.05;
+            camera.position.y += (mouse2D.y * 100 - camera.position.y) * 0.05;
             camera.lookAt(scene.position);
             ambientParticles.forEach(p => p.update());
             for (let i = magicParticles.length - 1; i >= 0; i--) {
-                const p = magicParticles[i];
-                p.update();
+                const p = magicParticles[i]; p.update();
                 if (p.life <= 0) { magicParticlesGroup.remove(p.mesh); magicParticles.splice(i, 1); }
             }
             renderer.render(scene, camera);
