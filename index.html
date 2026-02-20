@@ -22,8 +22,17 @@
             box-shadow: 0 0 25px rgba(236, 72, 153, 0.6);
             border-color: rgba(255, 255, 255, 0.6);
         }
-        .mode-btn { transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); border: 1px solid rgba(255,255,255,0.1); }
+        .mode-btn { 
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); 
+            border: 1px solid rgba(255,255,255,0.1);
+            flex-shrink: 0; /* 캐러셀 형태 유지를 위해 크기 고정 */
+        }
         .mode-btn:active { transform: scale(0.95); }
+        
+        /* 캐러셀 스크롤바 숨기기 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
         #flash-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: white; pointer-events: none; opacity: 0; z-index: 100;
@@ -34,26 +43,28 @@
 
     <div id="flash-overlay"></div>
 
-    <!-- UI 상단 -->
-    <div class="fixed top-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-5xl text-center pointer-events-none">
-        <h1 class="text-3xl font-black mb-1 tracking-tighter drop-shadow-2xl italic uppercase text-indigo-300">☄️ PLANET HUNTER V3</h1>
-        <p class="text-white/60 text-[10px] uppercase tracking-[0.3em] mb-4 text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-pink-300">사냥한 행성을 마법 가루로 정화하세요</p>
+    <!-- UI 상단: 캐러셀 레이아웃 적용 -->
+    <div class="fixed top-4 md:top-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-5xl text-center pointer-events-none px-4">
+        <h1 class="text-xl md:text-3xl font-black mb-2 md:mb-1 tracking-tighter drop-shadow-2xl italic uppercase text-indigo-300">☄️ PLANET HUNTER V3</h1>
         
-        <div class="glass-ui p-3 rounded-[2rem] flex flex-wrap justify-center gap-2 pointer-events-auto shadow-indigo-500/20">
-            <button onclick="setMode('fireworks')" id="btn-fireworks" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold active">🎆 대폭발</button>
-            <button onclick="setMode('hearts')" id="btn-hearts" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">💖 핑크하트</button>
-            <button onclick="setMode('stars')" id="btn-stars" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">⭐ 황금별빛</button>
-            <button onclick="setMode('lightning')" id="btn-lightning" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">⚡ 푸른번개</button>
-            <button onclick="setMode('snow')" id="btn-snow" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">❄️ 눈송이</button>
-            <button onclick="setMode('petals')" id="btn-petals" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🌸 꽃잎</button>
-            <button onclick="setMode('bubbles')" id="btn-bubbles" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🫧 비눗방울</button>
-            <button onclick="setMode('vortex')" id="btn-vortex" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🌪️ 소용돌이</button>
-            <button onclick="setMode('blackhole')" id="btn-blackhole" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🌀 블랙홀</button>
-            <button onclick="setMode('rainbow')" id="btn-rainbow" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🌈 무지개</button>
+        <!-- 버튼 캐러셀 컨테이너 -->
+        <div class="glass-ui p-2 md:p-3 rounded-[1.5rem] md:rounded-[2rem] pointer-events-auto shadow-indigo-500/20">
+            <div class="flex items-center gap-2 overflow-x-auto no-scrollbar snap-x snap-mandatory px-2">
+                <button onclick="setMode('fireworks')" id="btn-fireworks" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold active snap-center">🎆 대폭발</button>
+                <button onclick="setMode('hearts')" id="btn-hearts" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">💖 핑크하트</button>
+                <button onclick="setMode('stars')" id="btn-stars" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">⭐ 황금별빛</button>
+                <button onclick="setMode('lightning')" id="btn-lightning" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">⚡ 푸른번개</button>
+                <button onclick="setMode('snow')" id="btn-snow" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">❄️ 눈송이</button>
+                <button onclick="setMode('petals')" id="btn-petals" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">🌸 꽃잎</button>
+                <button onclick="setMode('bubbles')" id="btn-bubbles" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">🫧 비눗방울</button>
+                <button onclick="setMode('vortex')" id="btn-vortex" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">🌪️ 소용돌이</button>
+                <button onclick="setMode('blackhole')" id="btn-blackhole" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">🌀 블랙홀</button>
+                <button onclick="setMode('rainbow')" id="btn-rainbow" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">🌈 무지개</button>
+            </div>
         </div>
     </div>
 
-    <button onclick="toggleMute()" id="audio-toggle" class="fixed bottom-8 right-8 z-50 glass-ui w-14 h-14 rounded-full flex items-center justify-center text-2xl transition-all hover:scale-110 active:scale-90 shadow-2xl pointer-events-auto">🔊</button>
+    <button onclick="toggleMute()" id="audio-toggle" class="fixed bottom-6 right-6 md:bottom-8 md:right-8 z-50 glass-ui w-14 h-14 rounded-full flex items-center justify-center text-2xl transition-all hover:scale-110 active:scale-90 shadow-2xl pointer-events-auto">🔊</button>
 
     <div id="container"></div>
 
@@ -61,7 +72,7 @@
         // --- 하이브리드 설정 ---
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
         const config = {
-            maxParticles: isMobile ? 400 : 1800,
+            maxParticles: isMobile ? 450 : 1800,
             planetCount: isMobile ? 12 : 18,
             pixelRatio: Math.min(window.devicePixelRatio, 2)
         };
@@ -100,7 +111,7 @@
         snowShape.lineTo(-10, -1); snowShape.lineTo(-10, 1); snowShape.lineTo(-1, 1);
         snowShape.lineTo(-1, 10);
 
-        // --- 사운드 엔진 ---
+        // --- 사운드 엔진 (V2 로직 엄격 유지) ---
         let audioCtx;
         function initAudio() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -222,7 +233,7 @@
         // --- 파티클 및 행성 클래스 ---
 
         class MagicParticle {
-            constructor(pos, isMagic = true, isExplosion = false) {
+            constructor(pos, isMagic = true, isExplosion = false, isClick = false) {
                 this.life = 1.0;
                 this.decay = Math.random() * 0.015 + (isExplosion ? 0.005 : 0.012); 
                 const sizeBase = (Math.random() * 8 + 8) * (isExplosion ? 1.5 : 1.0);
@@ -255,7 +266,7 @@
                 this.mesh.position.copy(pos);
                 if (mode === 'hearts') { this.mesh.rotation.z = Math.PI; this.mesh.scale.set(0.4, 0.4, 0.4); }
 
-                const force = isExplosion ? 45 : 15;
+                const force = isExplosion ? 45 : (isClick ? 25 : 12);
                 this.velocity = new THREE.Vector3((r()-0.5)*force, (r()-0.5)*force, (r()-0.5)*force);
                 this.gravity = (mode === 'fireworks') ? -0.4 : 0.05;
                 this.friction = 0.95;
@@ -279,7 +290,7 @@
                 this.isDestroyed = false;
                 this.shake = 0;
                 
-                const radius = 70 + Math.random() * 60;
+                const radius = 75 + Math.random() * 60; // 행성 크기 확대
                 const geometry = new THREE.SphereGeometry(radius, 32, 32);
                 this.baseColor = new THREE.Color(`hsl(${Math.random() * 360}, 50%, 45%)`);
                 this.material = new THREE.MeshStandardMaterial({ 
@@ -303,7 +314,7 @@
                 const texture = new THREE.CanvasTexture(canvas);
                 const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
                 const sprite = new THREE.Sprite(spriteMaterial);
-                sprite.scale.set(75, 75, 1);
+                sprite.scale.set(80, 80, 1);
                 sprite.userData.context = context;
                 sprite.userData.texture = texture;
                 return sprite;
@@ -337,7 +348,7 @@
                 this.hp--;
                 this.shake = 30; 
                 
-                spawnMagic(point || this.mesh.position, true, isMobile ? 12 : 22);
+                spawnMagic(point || this.mesh.position, true, false, isMobile ? 12 : 22);
                 
                 if (this.hp <= 0) {
                     this.isDestroyed = true;
@@ -346,12 +357,12 @@
                     
                     triggerFlash();
                     playMagicSound(mode, true);
-                    spawnMagic(this.mesh.position, true, isMobile ? 70 : 130, true); // 거대 폭발
+                    spawnMagic(this.mesh.position, true, true, isMobile ? 80 : 150); // 파괴 폭발
                     setTimeout(() => this.reset(), 4000);
                 } else {
                     this.updateHPLabel();
                     playMagicSound(mode, false);
-                    this.material.emissiveIntensity = 10.0;
+                    this.material.emissiveIntensity = 12.0;
                 }
             }
 
@@ -365,7 +376,7 @@
                     this.mesh.position.x += (Math.random()-0.5) * this.shake;
                     this.mesh.position.y += (Math.random()-0.5) * this.shake;
                     this.shake *= 0.8;
-                    this.material.emissiveIntensity = Math.max(0.3, this.shake * 0.4);
+                    this.material.emissiveIntensity = Math.max(0.3, this.shake * 0.5);
                 } else {
                     const ratio = this.hp / this.maxHp;
                     this.material.emissiveIntensity = (1-ratio) * 3 + 0.3;
@@ -381,11 +392,11 @@
 
         function triggerFlash() {
             const flash = document.getElementById('flash-overlay');
-            flash.style.opacity = '0.5';
-            setTimeout(() => flash.style.opacity = '0', 200);
+            flash.style.opacity = '0.6';
+            setTimeout(() => flash.style.opacity = '0', 250);
         }
 
-        function spawnMagic(pos, isClick = false, count = 1, isExplosion = false) {
+        function spawnMagic(pos, isClick = false, isExplosion = false, count = 1) {
             for(let i=0; i < count; i++) {
                 if (magicParticles.length > config.maxParticles) {
                     const old = magicParticles.shift();
@@ -393,7 +404,7 @@
                     if(old.mesh.geometry) old.mesh.geometry.dispose();
                     if(old.mesh.material) old.mesh.material.dispose();
                 }
-                const p = new MagicParticle(pos, true, isExplosion);
+                const p = new MagicParticle(pos, true, isExplosion, isClick);
                 magicParticlesGroup.add(p.mesh);
                 magicParticles.push(p);
             }
@@ -422,7 +433,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.getElementById('container').appendChild(renderer.domElement);
             
-            const light = new THREE.PointLight(0xffffff, 3, 10000);
+            const light = new THREE.PointLight(0xffffff, 3.5, 10000);
             light.position.set(0, 800, 1500);
             scene.add(light, new THREE.AmbientLight(0x777777));
 
@@ -453,12 +464,12 @@
                 mouse3D.copy(camera.position).add(dir.multiplyScalar(-camera.position.z / dir.z));
                 
                 if (isStart) initAudio();
-                spawnMagic(mouse3D, isStart, isStart ? 25 : 6);
+                spawnMagic(mouse3D, isStart, false, isStart ? 25 : 8);
                 checkHit();
             };
 
             document.addEventListener('touchstart', (e) => { 
-                if (e.target.tagName === 'BUTTON') return;
+                if (e.target.closest('.glass-ui')) return; // UI 터치 시 게임 반응 차단
                 e.preventDefault(); isPressed = true;
                 handleInput(e.touches[0].clientX, e.touches[0].clientY, true);
             }, { passive: false });
@@ -471,7 +482,7 @@
             
             document.addEventListener('touchend', () => isPressed = false);
             document.addEventListener('mousedown', (e) => {
-                if (e.target.tagName === 'BUTTON') return;
+                if (e.target.closest('.glass-ui')) return;
                 isPressed = true; handleInput(e.clientX, e.clientY, true);
             });
             document.addEventListener('mousemove', (e) => { if(isPressed) handleInput(e.clientX, e.clientY, false); });
