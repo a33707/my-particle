@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D 슈퍼 마법 파티클 연구소 🌟</title>
+    <title>Planet Hunter V3 🌟</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
@@ -22,30 +22,31 @@
             box-shadow: 0 0 25px rgba(236, 72, 153, 0.6);
             border-color: rgba(255, 255, 255, 0.6);
         }
-        .mode-btn { 
-            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); 
-            border: 1px solid rgba(255,255,255,0.1);
-            /* Better touch feedback on mobile */
-            -webkit-tap-highlight-color: transparent;
-        }
+        .mode-btn { transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); border: 1px solid rgba(255,255,255,0.1); }
         .mode-btn:active { transform: scale(0.95); }
+        #flash-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: white; pointer-events: none; opacity: 0; z-index: 100;
+        }
     </style>
 </head>
 <body>
 
-    <!-- UI Top: Higher Z-index to ensure touch priority -->
+    <div id="flash-overlay"></div>
+
+    <!-- UI 상단 -->
     <div class="fixed top-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-5xl text-center pointer-events-none">
-        <h1 class="text-3xl font-black mb-1 tracking-tighter drop-shadow-2xl italic">✨ 3D SUPER MAGIC ✨</h1>
-        <p class="text-white/60 text-[10px] uppercase tracking-[0.3em] mb-4">드래그 리듬에 맞춰 변하는 부드러운 마법 사운드</p>
+        <h1 class="text-3xl font-black mb-1 tracking-tighter drop-shadow-2xl italic uppercase text-indigo-300">☄️ PLANET HUNTER V3</h1>
+        <p class="text-white/60 text-[10px] uppercase tracking-[0.3em] mb-4 text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-pink-300">사냥한 행성을 마법 가루로 정화하세요</p>
         
-        <div class="glass-ui p-3 rounded-[2rem] flex flex-wrap justify-center gap-2 pointer-events-auto">
+        <div class="glass-ui p-3 rounded-[2rem] flex flex-wrap justify-center gap-2 pointer-events-auto shadow-indigo-500/20">
             <button onclick="setMode('fireworks')" id="btn-fireworks" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold active">🎆 대폭발</button>
-            <button onclick="setMode('hearts')" id="btn-hearts" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">💖 하트</button>
-            <button onclick="setMode('stars')" id="btn-stars" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">⭐ 별빛</button>
-            <button onclick="setMode('lightning')" id="btn-lightning" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">⚡ 번개</button>
-            <button onclick="setMode('snow')" id="btn-snow" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">❄️ 눈</button>
+            <button onclick="setMode('hearts')" id="btn-hearts" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">💖 핑크하트</button>
+            <button onclick="setMode('stars')" id="btn-stars" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">⭐ 황금별빛</button>
+            <button onclick="setMode('lightning')" id="btn-lightning" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">⚡ 푸른번개</button>
+            <button onclick="setMode('snow')" id="btn-snow" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">❄️ 눈송이</button>
             <button onclick="setMode('petals')" id="btn-petals" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🌸 꽃잎</button>
-            <button onclick="setMode('bubbles')" id="btn-bubbles" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🫧 방울</button>
+            <button onclick="setMode('bubbles')" id="btn-bubbles" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🫧 비눗방울</button>
             <button onclick="setMode('vortex')" id="btn-vortex" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🌪️ 소용돌이</button>
             <button onclick="setMode('blackhole')" id="btn-blackhole" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🌀 블랙홀</button>
             <button onclick="setMode('rainbow')" id="btn-rainbow" class="mode-btn px-3 py-2 rounded-2xl text-xs font-bold">🌈 무지개</button>
@@ -57,20 +58,27 @@
     <div id="container"></div>
 
     <script>
-        // --- 3D Engine Setup ---
-        let scene, camera, renderer, ambientParticlesGroup, magicParticlesGroup;
-        let ambientParticles = []; 
+        // --- 하이브리드 설정 ---
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+        const config = {
+            maxParticles: isMobile ? 400 : 1800,
+            planetCount: isMobile ? 12 : 18,
+            pixelRatio: Math.min(window.devicePixelRatio, 2)
+        };
+
+        // --- 엔진 변수 ---
+        let scene, camera, renderer, magicParticlesGroup, planetsGroup;
         let magicParticles = [];   
+        let planets = [];
         const mouse3D = new THREE.Vector3();
-        const mouse2D = new THREE.Vector2();
+        const mouse2D = new THREE.Vector2(-10, -10);
+        const raycaster = new THREE.Raycaster();
         let mode = 'fireworks';
         let soundEnabled = true;
         let isPressed = false;
         let lastSoundTime = 0;
 
-        // Performance Safety: Max particle count
-        const MAX_PARTICLES = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? 400 : 1200;
-
+        // --- 형상 정의 ---
         const heartShape = new THREE.Shape();
         heartShape.moveTo(0, 5);
         heartShape.bezierCurveTo(0, 5, -5, 12, -12, 12);
@@ -92,7 +100,7 @@
         snowShape.lineTo(-10, -1); snowShape.lineTo(-10, 1); snowShape.lineTo(-1, 1);
         snowShape.lineTo(-1, 10);
 
-        // --- Sound Engine ---
+        // --- 사운드 엔진 ---
         let audioCtx;
         function initAudio() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -100,7 +108,7 @@
         }
 
         function playSoftNoise(duration, volume, freq) {
-            if (!audioCtx) return;
+            if(!audioCtx) return;
             const bufferSize = audioCtx.sampleRate * duration;
             const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
             const data = buffer.getChannelData(0);
@@ -211,127 +219,263 @@
             }
         }
 
-        function toggleMute() {
-            soundEnabled = !soundEnabled;
-            const btn = document.getElementById('audio-toggle');
-            btn.textContent = soundEnabled ? '🔊' : '🔇';
-            btn.style.opacity = soundEnabled ? '1' : '0.5';
-        }
+        // --- 파티클 및 행성 클래스 ---
 
-        // --- Particle System ---
         class MagicParticle {
-            constructor(pos, isMagic = false) {
-                this.isMagic = isMagic;
+            constructor(pos, isMagic = true, isExplosion = false) {
                 this.life = 1.0;
-                this.decay = isMagic ? (Math.random() * 0.01 + 0.008) : 0; 
-                const sizeBase = isMagic ? Math.random() * 8 + 8 : Math.random() * 2 + 1;
+                this.decay = Math.random() * 0.015 + (isExplosion ? 0.005 : 0.012); 
+                const sizeBase = (Math.random() * 8 + 8) * (isExplosion ? 1.5 : 1.0);
                 let geometry;
                 
-                if (isMagic) {
-                    switch(mode) {
-                        case 'hearts': geometry = new THREE.ExtrudeGeometry(heartShape, { depth: 4, bevelEnabled: true, bevelThickness: 1, bevelSize: 1, bevelSegments: 3 }); break;
-                        case 'stars': geometry = new THREE.OctahedronGeometry(sizeBase, 0); break;
-                        case 'lightning': geometry = new THREE.TetrahedronGeometry(sizeBase, 0); break;
-                        case 'snow': geometry = new THREE.ShapeGeometry(snowShape); break;
-                        case 'petals': geometry = new THREE.ShapeGeometry(petalShape); break;
-                        case 'bubbles': geometry = new THREE.SphereGeometry(sizeBase, 5, 4); break;
-                        case 'vortex': geometry = new THREE.CylinderGeometry(0.1, sizeBase, sizeBase*2, 6); break;
-                        case 'blackhole': geometry = new THREE.TorusGeometry(sizeBase, sizeBase*0.3, 8, 16); break;
-                        case 'rainbow': geometry = new THREE.DodecahedronGeometry(sizeBase, 0); break;
-                        default: geometry = new THREE.SphereGeometry(sizeBase, 8, 8);
-                    }
-                } else {
-                    geometry = new THREE.SphereGeometry(sizeBase, 4, 4);
+                switch(mode) {
+                    case 'hearts': geometry = new THREE.ExtrudeGeometry(heartShape, { depth: 4, bevelEnabled: true, bevelThickness: 1, bevelSize: 1, bevelSegments: 3 }); break;
+                    case 'stars': geometry = new THREE.OctahedronGeometry(sizeBase, 0); break;
+                    case 'lightning': geometry = new THREE.TetrahedronGeometry(sizeBase, 0); break;
+                    case 'snow': geometry = new THREE.ShapeGeometry(snowShape); break;
+                    case 'petals': geometry = new THREE.ShapeGeometry(petalShape); break;
+                    case 'bubbles': geometry = new THREE.SphereGeometry(sizeBase, 5, 4); break;
+                    case 'vortex': geometry = new THREE.CylinderGeometry(0.1, sizeBase, sizeBase*2, 6); break;
+                    case 'blackhole': geometry = new THREE.TorusGeometry(sizeBase, sizeBase*0.3, 8, 16); break;
+                    case 'rainbow': geometry = new THREE.DodecahedronGeometry(sizeBase, 0); break;
+                    default: geometry = new THREE.SphereGeometry(sizeBase, 8, 8);
                 }
                 
                 const r = Math.random;
                 let color;
-                if (isMagic) {
-                    switch(mode) {
-                        case 'hearts': color = new THREE.Color(`hsl(${r() * 20 + 340}, 100%, 75%)`); break;
-                        case 'stars': color = new THREE.Color(`hsl(${r() * 15 + 45}, 100%, 75%)`); break;
-                        case 'bubbles': color = new THREE.Color(0xaaccff); break; 
-                        case 'rainbow': color = new THREE.Color(`hsl(${r() * 360}, 100%, 65%)`); break;
-                        default: color = new THREE.Color(`hsl(${r() * 360}, 100%, 70%)`);
-                    }
-                } else {
-                    const h = r() > 0.5 ? 260 : 320;
-                    color = new THREE.Color(`hsl(${h}, 95%, 65%)`);
+                switch(mode) {
+                    case 'hearts': color = new THREE.Color(`hsl(${r() * 20 + 340}, 100%, 75%)`); break;
+                    case 'stars': color = new THREE.Color(`hsl(${r() * 15 + 45}, 100%, 75%)`); break;
+                    case 'rainbow': color = new THREE.Color(`hsl(${r() * 360}, 100%, 70%)`); break;
+                    default: color = new THREE.Color(`hsl(${r() * 360}, 100%, 80%)`);
                 }
 
-                const materialOptions = { color: color, transparent: true, opacity: isMagic ? 1 : 0.8, side: THREE.DoubleSide };
-                if (isMagic && mode === 'bubbles') { materialOptions.wireframe = true; materialOptions.opacity = 0.9; }
-
-                const material = new THREE.MeshBasicMaterial(materialOptions);
+                const material = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 1, side: THREE.DoubleSide, wireframe: (mode === 'bubbles') });
                 this.mesh = new THREE.Mesh(geometry, material);
                 this.mesh.position.copy(pos);
-                if (isMagic && mode === 'hearts') this.mesh.rotation.z = Math.PI;
+                if (mode === 'hearts') { this.mesh.rotation.z = Math.PI; this.mesh.scale.set(0.4, 0.4, 0.4); }
 
-                const angle = r() * Math.PI * 2;
-                const phi = r() * Math.PI;
-                const force = isMagic ? (r() * 12 + 6) : (r() * 1.5 + 0.5);
-                this.velocity = new THREE.Vector3(Math.sin(phi)*Math.cos(angle)*force, Math.sin(phi)*Math.sin(angle)*force, Math.cos(phi)*force);
-                this.gravity = (isMagic && mode === 'fireworks') ? -0.2 : 0;
-                if (isMagic && (mode === 'bubbles' || mode === 'hearts' || mode === 'snow')) this.gravity = 0.08; 
-                this.friction = 0.96;
-                this.angleOffset = r() * Math.PI * 2;
-                this.rotationSpeed = new THREE.Vector3(r()*0.2, r()*0.2, r()*0.2);
+                const force = isExplosion ? 45 : 15;
+                this.velocity = new THREE.Vector3((r()-0.5)*force, (r()-0.5)*force, (r()-0.5)*force);
+                this.gravity = (mode === 'fireworks') ? -0.4 : 0.05;
+                this.friction = 0.95;
             }
 
             update() {
-                if (this.isMagic) {
-                    this.life -= this.decay;
-                    this.mesh.material.opacity = Math.max(0, this.life);
-                    this.mesh.rotation.x += this.rotationSpeed.x;
-                    this.mesh.rotation.y += this.rotationSpeed.y;
-                    this.mesh.rotation.z += this.rotationSpeed.z;
-                    if (mode === 'vortex') {
-                        const vec = new THREE.Vector3().subVectors(mouse3D, this.mesh.position);
-                        if (vec.length() < 350) { this.velocity.applyAxisAngle(new THREE.Vector3(0, 1, 0), 0.2); this.velocity.add(vec.normalize().multiplyScalar(0.6)); }
-                    } else if (mode === 'blackhole') {
-                        const vec = new THREE.Vector3().subVectors(mouse3D, this.mesh.position);
-                        if (vec.length() > 5) { this.velocity.add(vec.normalize().multiplyScalar(1.5)); if (vec.length() < 60) { this.mesh.scale.multiplyScalar(0.92); this.velocity.applyAxisAngle(new THREE.Vector3(0,0,1), 0.5); } }
-                    }
-                    this.velocity.y += this.gravity;
-                    this.mesh.position.add(this.velocity);
-                    this.velocity.multiplyScalar(this.friction);
+                this.life -= this.decay;
+                this.mesh.material.opacity = Math.max(0, this.life);
+                this.mesh.rotation.x += 0.1;
+                this.velocity.y += this.gravity;
+                this.mesh.position.add(this.velocity);
+                this.velocity.multiplyScalar(this.friction);
+                if (this.life < 0.2) this.mesh.scale.multiplyScalar(0.92);
+            }
+        }
+
+        class Planet {
+            constructor() {
+                this.maxHp = 3 + Math.floor(Math.random() * 3);
+                this.hp = this.maxHp;
+                this.isDestroyed = false;
+                this.shake = 0;
+                
+                const radius = 70 + Math.random() * 60;
+                const geometry = new THREE.SphereGeometry(radius, 32, 32);
+                this.baseColor = new THREE.Color(`hsl(${Math.random() * 360}, 50%, 45%)`);
+                this.material = new THREE.MeshStandardMaterial({ 
+                    color: this.baseColor, roughness: 0.8, emissive: this.baseColor, emissiveIntensity: 0.3 
+                });
+                
+                this.mesh = new THREE.Mesh(geometry, this.material);
+                this.mesh.userData = { parent: this };
+
+                this.hpLabel = this.createHPLabel();
+                this.mesh.add(this.hpLabel);
+                this.hpLabel.position.set(0, radius + 30, 0);
+
+                this.reset();
+            }
+
+            createHPLabel() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 128; canvas.height = 128;
+                const context = canvas.getContext('2d');
+                const texture = new THREE.CanvasTexture(canvas);
+                const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+                const sprite = new THREE.Sprite(spriteMaterial);
+                sprite.scale.set(75, 75, 1);
+                sprite.userData.context = context;
+                sprite.userData.texture = texture;
+                return sprite;
+            }
+
+            updateHPLabel() {
+                const context = this.hpLabel.userData.context;
+                const texture = this.hpLabel.userData.texture;
+                context.clearRect(0, 0, 128, 128);
+                context.font = 'bold 90px Pretendard';
+                context.fillStyle = 'white';
+                context.textAlign = 'center';
+                context.shadowColor = 'rgba(0,0,0,0.9)';
+                context.shadowBlur = 12;
+                context.fillText(this.hp, 64, 90);
+                texture.needsUpdate = true;
+            }
+
+            reset() {
+                this.hp = this.maxHp;
+                this.isDestroyed = false;
+                this.mesh.visible = true;
+                this.updateHPLabel();
+                this.mesh.position.set((Math.random()-0.5)*2600, (Math.random()-0.5)*1800, (Math.random()-0.5)*1000 - 500);
+                this.velocity = new THREE.Vector3((Math.random()-0.5)*1.4, (Math.random()-0.5)*1.4, (Math.random()-0.5)*0.5);
+                this.rotationVel = new THREE.Vector3(Math.random()*0.01, Math.random()*0.01, Math.random()*0.01);
+            }
+
+            hit(point) {
+                if (this.isDestroyed) return;
+                this.hp--;
+                this.shake = 30; 
+                
+                spawnMagic(point || this.mesh.position, true, isMobile ? 12 : 22);
+                
+                if (this.hp <= 0) {
+                    this.isDestroyed = true;
+                    this.mesh.visible = false;
+                    this.hpLabel.material.opacity = 0;
+                    
+                    triggerFlash();
+                    playMagicSound(mode, true);
+                    spawnMagic(this.mesh.position, true, isMobile ? 70 : 130, true); // 거대 폭발
+                    setTimeout(() => this.reset(), 4000);
                 } else {
-                    this.mesh.position.add(this.velocity);
-                    this.velocity.x += Math.cos(Date.now() * 0.0008 + this.angleOffset) * 0.01;
-                    this.velocity.y += Math.sin(Date.now() * 0.0008 + this.angleOffset) * 0.01;
-                    this.velocity.multiplyScalar(0.995);
-                    if (Math.abs(this.mesh.position.x) > 1000) this.velocity.x *= -1;
-                    if (Math.abs(this.mesh.position.y) > 600) this.velocity.y *= -1;
-                    if (Math.abs(this.mesh.position.z) > 600) this.velocity.z *= -1;
+                    this.updateHPLabel();
+                    playMagicSound(mode, false);
+                    this.material.emissiveIntensity = 10.0;
+                }
+            }
+
+            update() {
+                if (this.isDestroyed) return;
+                this.mesh.position.add(this.velocity);
+                this.mesh.rotation.x += this.rotationVel.x;
+                this.mesh.rotation.y += this.rotationVel.y;
+
+                if (this.shake > 0) {
+                    this.mesh.position.x += (Math.random()-0.5) * this.shake;
+                    this.mesh.position.y += (Math.random()-0.5) * this.shake;
+                    this.shake *= 0.8;
+                    this.material.emissiveIntensity = Math.max(0.3, this.shake * 0.4);
+                } else {
+                    const ratio = this.hp / this.maxHp;
+                    this.material.emissiveIntensity = (1-ratio) * 3 + 0.3;
+                }
+
+                if (Math.abs(this.mesh.position.x) > 1600) this.velocity.x *= -1;
+                if (Math.abs(this.mesh.position.y) > 1200) this.velocity.y *= -1;
+                this.hpLabel.material.opacity = this.mesh.visible ? 1 : 0;
+            }
+        }
+
+        // --- 로직 및 실행 ---
+
+        function triggerFlash() {
+            const flash = document.getElementById('flash-overlay');
+            flash.style.opacity = '0.5';
+            setTimeout(() => flash.style.opacity = '0', 200);
+        }
+
+        function spawnMagic(pos, isClick = false, count = 1, isExplosion = false) {
+            for(let i=0; i < count; i++) {
+                if (magicParticles.length > config.maxParticles) {
+                    const old = magicParticles.shift();
+                    magicParticlesGroup.remove(old.mesh);
+                    if(old.mesh.geometry) old.mesh.geometry.dispose();
+                    if(old.mesh.material) old.mesh.material.dispose();
+                }
+                const p = new MagicParticle(pos, true, isExplosion);
+                magicParticlesGroup.add(p.mesh);
+                magicParticles.push(p);
+            }
+        }
+
+        function checkHit() {
+            raycaster.setFromCamera(mouse2D, camera);
+            const intersects = raycaster.intersectObjects(planetsGroup.children);
+            if (intersects.length > 0) {
+                const planet = intersects[0].object.userData.parent;
+                const now = Date.now();
+                if (now - (planet.lastHit || 0) > 120) {
+                    planet.hit(intersects[0].point);
+                    planet.lastHit = now;
                 }
             }
         }
 
         function init() {
             scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 5000);
-            camera.position.z = 700;
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 20000);
+            camera.position.z = 1200;
+
+            renderer = new THREE.WebGLRenderer({ antialias: !isMobile, alpha: true });
+            renderer.setPixelRatio(config.pixelRatio);
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             document.getElementById('container').appendChild(renderer.domElement);
-            ambientParticlesGroup = new THREE.Group();
+            
+            const light = new THREE.PointLight(0xffffff, 3, 10000);
+            light.position.set(0, 800, 1500);
+            scene.add(light, new THREE.AmbientLight(0x777777));
+
             magicParticlesGroup = new THREE.Group();
-            scene.add(ambientParticlesGroup);
-            scene.add(magicParticlesGroup);
-            for (let i = 0; i < 400; i++) { // Reduced count for mobile safety
-                const pos = new THREE.Vector3((Math.random()-0.5)*2000,(Math.random()-0.5)*1200,(Math.random()-0.5)*1200);
-                const p = new MagicParticle(pos, false);
-                ambientParticlesGroup.add(p.mesh);
-                ambientParticles.push(p);
+            planetsGroup = new THREE.Group();
+            scene.add(magicParticlesGroup, planetsGroup);
+
+            for (let i = 0; i < config.planetCount; i++) {
+                const p = new Planet();
+                planets.push(p);
+                planetsGroup.add(p.mesh);
             }
+
+            const starGeom = new THREE.BufferGeometry();
+            const starPos = [];
+            for(let i=0; i<2500; i++) starPos.push((Math.random()-0.5)*12000, (Math.random()-0.5)*10000, (Math.random()-1)*7000);
+            starGeom.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+            scene.add(new THREE.Points(starGeom, new THREE.PointsMaterial({ color: 0xffffff, size: 2.8, transparent: true, opacity: 0.7 })));
+
             window.addEventListener('resize', onWindowResize);
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mousedown', onMouseDown);
-            document.addEventListener('mouseup', onMouseUp);
-            document.addEventListener('touchstart', onTouchStart, { passive: false });
-            document.addEventListener('touchmove', onTouchMove, { passive: false });
-            document.addEventListener('touchend', onMouseUp);
+            
+            const handleInput = (x, y, isStart) => {
+                mouse2D.x = (x / window.innerWidth) * 2 - 1;
+                mouse2D.y = -(y / window.innerHeight) * 2 + 1;
+                
+                const vector = new THREE.Vector3(mouse2D.x, mouse2D.y, 0.5).unproject(camera);
+                const dir = vector.sub(camera.position).normalize();
+                mouse3D.copy(camera.position).add(dir.multiplyScalar(-camera.position.z / dir.z));
+                
+                if (isStart) initAudio();
+                spawnMagic(mouse3D, isStart, isStart ? 25 : 6);
+                checkHit();
+            };
+
+            document.addEventListener('touchstart', (e) => { 
+                if (e.target.tagName === 'BUTTON') return;
+                e.preventDefault(); isPressed = true;
+                handleInput(e.touches[0].clientX, e.touches[0].clientY, true);
+            }, { passive: false });
+            
+            document.addEventListener('touchmove', (e) => {
+                if (!isPressed) return;
+                e.preventDefault();
+                handleInput(e.touches[0].clientX, e.touches[0].clientY, false);
+            }, { passive: false });
+            
+            document.addEventListener('touchend', () => isPressed = false);
+            document.addEventListener('mousedown', (e) => {
+                if (e.target.tagName === 'BUTTON') return;
+                isPressed = true; handleInput(e.clientX, e.clientY, true);
+            });
+            document.addEventListener('mousemove', (e) => { if(isPressed) handleInput(e.clientX, e.clientY, false); });
+            window.addEventListener('mouseup', () => isPressed = false);
         }
 
         function onWindowResize() {
@@ -339,90 +483,27 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        function updateMouse3D() {
-            const vector = new THREE.Vector3(mouse2D.x, mouse2D.y, 0.5);
-            vector.unproject(camera);
-            const dir = vector.sub(camera.position).normalize();
-            const distance = -camera.position.z / dir.z;
-            mouse3D.copy(camera.position).add(dir.multiplyScalar(distance));
-        }
-
-        function onMouseMove(e) {
-            mouse2D.x = (e.clientX / window.innerWidth) * 2 - 1;
-            mouse2D.y = -(e.clientY / window.innerHeight) * 2 + 1;
-            updateMouse3D();
-            if (isPressed) spawnMagic(false);
-        }
-
-        function onMouseDown(e) {
-            // Check if user clicked on a UI button
-            if (e.target.tagName === 'BUTTON') return;
-            initAudio(); isPressed = true; onMouseMove(e); spawnMagic(true);
-        }
-
-        function onMouseUp() { isPressed = false; }
-
-        function onTouchStart(e) { 
-            // Crucial: Only prevent default if touching the canvas, not UI buttons
-            if (e.target.tagName === 'BUTTON') return;
-            
-            e.preventDefault(); 
-            initAudio(); 
-            isPressed = true; 
-            updateTouch(e); 
-            spawnMagic(true); 
-        }
-
-        function onTouchMove(e) { 
-            if (e.target.tagName === 'BUTTON') return;
-            e.preventDefault(); 
-            updateTouch(e); 
-            if (isPressed) spawnMagic(false); 
-        }
-
-        function updateTouch(e) {
-            if (e.touches.length > 0) {
-                const touch = e.touches[0];
-                mouse2D.x = (touch.clientX / window.innerWidth) * 2 - 1;
-                mouse2D.y = -(touch.clientY / window.innerHeight) * 2 + 1;
-                updateMouse3D();
-            }
-        }
-
-        function spawnMagic(isClick = false) {
-            playMagicSound(mode, isClick);
-            const count = isClick ? 60 : 15;
-            for (let i = 0; i < count; i++) {
-                // Garbage collection for performance
-                if (magicParticles.length > MAX_PARTICLES) {
-                    const oldP = magicParticles.shift();
-                    magicParticlesGroup.remove(oldP.mesh);
-                    if(oldP.mesh.geometry) oldP.mesh.geometry.dispose();
-                    if(oldP.mesh.material) oldP.mesh.material.dispose();
-                }
-                const p = new MagicParticle(mouse3D, true);
-                magicParticlesGroup.add(p.mesh);
-                magicParticles.push(p);
-            }
-        }
-
-        function setMode(newMode) {
-            mode = newMode;
+        function setMode(m) {
+            mode = m;
             document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById('btn-' + newMode).classList.add('active');
-            initAudio(); 
-            playMagicSound(newMode, true);
+            document.getElementById('btn-' + m).classList.add('active');
+            initAudio(); playMagicSound(m, true);
+        }
+
+        function toggleMute() {
+            soundEnabled = !soundEnabled;
+            document.getElementById('audio-toggle').textContent = soundEnabled ? '🔊' : '🔇';
         }
 
         function animate() {
             requestAnimationFrame(animate);
-            camera.position.x += (mouse2D.x * 100 - camera.position.x) * 0.05;
-            camera.position.y += (mouse2D.y * 100 - camera.position.y) * 0.05;
-            camera.lookAt(scene.position);
-            ambientParticles.forEach(p => p.update());
+            planets.forEach(p => p.update());
             for (let i = magicParticles.length - 1; i >= 0; i--) {
                 const p = magicParticles[i]; p.update();
-                if (p.life <= 0) { magicParticlesGroup.remove(p.mesh); magicParticles.splice(i, 1); }
+                if (p.life <= 0) {
+                    magicParticlesGroup.remove(p.mesh);
+                    magicParticles.splice(i, 1);
+                }
             }
             renderer.render(scene, camera);
         }
