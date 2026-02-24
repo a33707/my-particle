@@ -28,6 +28,13 @@
             flex-shrink: 0; /* 캐러셀 형태 유지를 위해 크기 고정 */
         }
         .mode-btn:active { transform: scale(0.95); }
+        .mode-btn:disabled,
+        .mode-btn.disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
         
         /* 캐러셀 스크롤바 숨기기 */
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -37,11 +44,42 @@
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: white; pointer-events: none; opacity: 0; z-index: 100;
         }
+
+        #toast {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.96);
+            padding: 0.75rem 1.5rem;
+            border-radius: 9999px;
+            background: rgba(15, 23, 42, 0.96);
+            color: #e5e7eb;
+            z-index: 110;
+            font-weight: 700;
+            font-size: 0.9rem;
+            text-align: center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.25s ease-out, transform 0.25s ease-out;
+        }
+        #toast.show {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1.02);
+        }
     </style>
 </head>
 <body>
 
     <div id="flash-overlay"></div>
+
+    <!-- 진행도 / 통계 HUD -->
+    <div id="hud-panel" class="fixed top-24 md:top-28 left-4 z-40 glass-ui rounded-2xl px-3 py-2 text-[11px] md:text-xs leading-tight pointer-events-none">
+        <div id="hud-stage" class="font-bold text-indigo-300 text-xs md:text-sm">STAGE 1</div>
+        <div id="hud-progress" class="mt-0.5 text-slate-100">행성 0 / 10</div>
+        <div id="hud-boss" class="mt-0.5 text-pink-200">보스 0</div>
+    </div>
+
+    <div id="toast" class="text-sm md:text-base uppercase tracking-tight drop-shadow-2xl"></div>
 
     <!-- UI 상단: 캐러셀 레이아웃 적용 -->
     <div class="fixed top-4 md:top-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-5xl text-center pointer-events-none px-4">
@@ -88,6 +126,23 @@
         let soundEnabled = true;
         let isPressed = false;
         let lastSoundTime = 0;
+
+        // --- 진행도 / 보상 시스템 ---
+        let currentStage = 1;
+        let planetsDestroyedTotal = 0;
+        let planetsDestroyedThisStage = 0;
+        let bossesDefeated = 0;
+        const PLANETS_PER_STAGE = 10;
+        const BOSS_SPAWN_INTERVAL = 15;
+        let bossActive = false;
+        let currentBoss = null;
+
+        const unlockedModes = new Set(['fireworks', 'hearts', 'stars', 'snow']);
+
+        let hudStageEl, hudProgressEl, hudBossEl, toastEl;
+        let mainLight = null;
+        let starsMaterial = null;
+        const stageLightColors = [0x6366f1, 0xa855f7, 0xf97316, 0x22c55e, 0xec4899];
 
         // --- 형상 정의 ---
         const heartShape = new THREE.Shape();
@@ -284,15 +339,26 @@
         }
 
         class Planet {
-            constructor() {
-                this.maxHp = 3 + Math.floor(Math.random() * 3);
-                this.hp = this.maxHp;
-                this.isDestroyed = false;
+            constructor(isBoss = false) {
+                this.isBoss = isBoss;
                 this.shake = 0;
+
+                let radius;
+                if (this.isBoss) {
+                    this.maxHp = 10;
+                    this.hp = this.maxHp;
+                    radius = 150;
+                    this.baseColor = new THREE.Color(0xf97316);
+                } else {
+                    this.maxHp = 3 + Math.floor(Math.random() * 3);
+                    this.hp = this.maxHp;
+                    radius = 75 + Math.random() * 60; // 행성 크기 확대
+                    this.baseColor = new THREE.Color(`hsl(${Math.random() * 360}, 50%, 45%)`);
+                }
+                this.isDestroyed = false;
+                this.radius = radius;
                 
-                const radius = 75 + Math.random() * 60; // 행성 크기 확대
-                const geometry = new THREE.SphereGeometry(radius, 32, 32);
-                this.baseColor = new THREE.Color(`hsl(${Math.random() * 360}, 50%, 45%)`);
+                const geometry = new THREE.SphereGeometry(this.radius, 32, 32);
                 this.material = new THREE.MeshStandardMaterial({ 
                     color: this.baseColor, roughness: 0.8, emissive: this.baseColor, emissiveIntensity: 0.3 
                 });
@@ -302,7 +368,7 @@
 
                 this.hpLabel = this.createHPLabel();
                 this.mesh.add(this.hpLabel);
-                this.hpLabel.position.set(0, radius + 30, 0);
+                this.hpLabel.position.set(0, this.radius + 30, 0);
 
                 this.reset();
             }
@@ -338,9 +404,16 @@
                 this.isDestroyed = false;
                 this.mesh.visible = true;
                 this.updateHPLabel();
-                this.mesh.position.set((Math.random()-0.5)*2600, (Math.random()-0.5)*1800, (Math.random()-0.5)*1000 - 500);
-                this.velocity = new THREE.Vector3((Math.random()-0.5)*1.4, (Math.random()-0.5)*1.4, (Math.random()-0.5)*0.5);
-                this.rotationVel = new THREE.Vector3(Math.random()*0.01, Math.random()*0.01, Math.random()*0.01);
+
+                if (this.isBoss) {
+                    this.mesh.position.set(0, 0, -200);
+                    this.velocity = new THREE.Vector3(0, 0, 0);
+                    this.rotationVel = new THREE.Vector3(0.004, 0.006, 0.002);
+                } else {
+                    this.mesh.position.set((Math.random()-0.5)*2600, (Math.random()-0.5)*1800, (Math.random()-0.5)*1000 - 500);
+                    this.velocity = new THREE.Vector3((Math.random()-0.5)*1.4, (Math.random()-0.5)*1.4, (Math.random()-0.5)*0.5);
+                    this.rotationVel = new THREE.Vector3(Math.random()*0.01, Math.random()*0.01, Math.random()*0.01);
+                }
             }
 
             hit(point) {
@@ -358,7 +431,17 @@
                     triggerFlash();
                     playMagicSound(mode, true);
                     spawnMagic(this.mesh.position, true, true, isMobile ? 80 : 150); // 파괴 폭발
-                    setTimeout(() => this.reset(), 4000);
+
+                    if (this.isBoss) {
+                        if (typeof onBossDefeated === 'function') {
+                            onBossDefeated(this);
+                        }
+                    } else {
+                        if (typeof onPlanetDestroyed === 'function') {
+                            onPlanetDestroyed(this);
+                        }
+                        setTimeout(() => this.reset(), 4000);
+                    }
                 } else {
                     this.updateHPLabel();
                     playMagicSound(mode, false);
@@ -423,6 +506,150 @@
             }
         }
 
+        // --- 진행도 / 보스 / 보상 로직 ---
+
+        function setupUIRefs() {
+            hudStageEl = document.getElementById('hud-stage');
+            hudProgressEl = document.getElementById('hud-progress');
+            hudBossEl = document.getElementById('hud-boss');
+            toastEl = document.getElementById('toast');
+
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                if (!btn.dataset.label) {
+                    btn.dataset.label = btn.textContent.trim();
+                }
+            });
+        }
+
+        function updateHUD() {
+            if (!hudStageEl || !hudProgressEl || !hudBossEl) return;
+            hudStageEl.textContent = `STAGE ${currentStage}`;
+            hudProgressEl.textContent = `행성 ${planetsDestroyedThisStage} / ${PLANETS_PER_STAGE}`;
+            hudBossEl.textContent = `보스 ${bossesDefeated}`;
+        }
+
+        let toastTimeout;
+        function showToast(message) {
+            if (!toastEl) return;
+            toastEl.textContent = message;
+            toastEl.classList.add('show');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toastEl.classList.remove('show');
+            }, 2000);
+        }
+
+        function changeStageAppearance() {
+            if (!mainLight || !starsMaterial) return;
+            const color = stageLightColors[(currentStage - 1) % stageLightColors.length];
+            mainLight.color.setHex(color);
+            starsMaterial.color.setHex(color);
+        }
+
+        function advanceStage() {
+            currentStage++;
+            planetsDestroyedThisStage = 0;
+            updateHUD();
+            checkUnlocks();
+            changeStageAppearance();
+            showToast(`STAGE ${currentStage} 시작!`);
+        }
+
+        function spawnBoss() {
+            if (bossActive) return;
+            bossActive = true;
+
+            planets.forEach(p => {
+                if (!p.isBoss) {
+                    p.mesh.visible = false;
+                }
+            });
+
+            const boss = new Planet(true);
+            currentBoss = boss;
+            planets.push(boss);
+            planetsGroup.add(boss.mesh);
+
+            updateHUD();
+            showToast('큰 행성 등장!');
+        }
+
+        function onPlanetDestroyed() {
+            planetsDestroyedTotal++;
+            planetsDestroyedThisStage++;
+            updateHUD();
+            checkUnlocks();
+
+            if (planetsDestroyedThisStage >= PLANETS_PER_STAGE && !bossActive) {
+                advanceStage();
+            }
+
+            if (!bossActive && planetsDestroyedTotal > 0 && planetsDestroyedTotal % BOSS_SPAWN_INTERVAL === 0) {
+                spawnBoss();
+            }
+        }
+
+        function onBossDefeated(boss) {
+            bossesDefeated++;
+            bossActive = false;
+
+            if (boss) {
+                planetsGroup.remove(boss.mesh);
+                const idx = planets.indexOf(boss);
+                if (idx !== -1) planets.splice(idx, 1);
+            }
+
+            planets.forEach(p => {
+                if (!p.isBoss) {
+                    p.reset();
+                }
+            });
+
+            updateHUD();
+            checkUnlocks();
+            showToast('큰 행성 격파!');
+
+            const prevMode = mode;
+            unlockMode('rainbow');
+            if (prevMode !== 'rainbow') {
+                setMode('rainbow');
+                setTimeout(() => {
+                    if (mode === 'rainbow') {
+                        setMode(prevMode);
+                    }
+                }, 2500);
+            }
+        }
+
+        function isModeUnlocked(m) {
+            return unlockedModes.has(m);
+        }
+
+        function unlockMode(m) {
+            if (unlockedModes.has(m)) return;
+            unlockedModes.add(m);
+            updateModeButtons();
+            showToast('새 모드 해금!');
+        }
+
+        function checkUnlocks() {
+            if (currentStage >= 2) unlockMode('petals');
+            if (planetsDestroyedTotal >= 30) unlockMode('bubbles');
+            if (bossesDefeated >= 1) unlockMode('vortex');
+            if (bossesDefeated >= 2) unlockMode('blackhole');
+            if (bossesDefeated >= 3) unlockMode('rainbow');
+        }
+
+        function updateModeButtons() {
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                const m = btn.id.replace('btn-', '');
+                const unlocked = unlockedModes.has(m);
+                btn.disabled = !unlocked;
+                btn.classList.toggle('opacity-40', !unlocked);
+                btn.classList.toggle('cursor-not-allowed', !unlocked);
+            });
+        }
+
         function init() {
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 20000);
@@ -435,7 +662,8 @@
             
             const light = new THREE.PointLight(0xffffff, 3.5, 10000);
             light.position.set(0, 800, 1500);
-            scene.add(light, new THREE.AmbientLight(0x777777));
+            mainLight = light;
+            scene.add(mainLight, new THREE.AmbientLight(0x777777));
 
             magicParticlesGroup = new THREE.Group();
             planetsGroup = new THREE.Group();
@@ -451,7 +679,9 @@
             const starPos = [];
             for(let i=0; i<2500; i++) starPos.push((Math.random()-0.5)*12000, (Math.random()-0.5)*10000, (Math.random()-1)*7000);
             starGeom.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
-            scene.add(new THREE.Points(starGeom, new THREE.PointsMaterial({ color: 0xffffff, size: 2.8, transparent: true, opacity: 0.7 })));
+            starsMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 2.8, transparent: true, opacity: 0.7 });
+            const stars = new THREE.Points(starGeom, starsMaterial);
+            scene.add(stars);
 
             window.addEventListener('resize', onWindowResize);
             
@@ -487,6 +717,11 @@
             });
             document.addEventListener('mousemove', (e) => { if(isPressed) handleInput(e.clientX, e.clientY, false); });
             window.addEventListener('mouseup', () => isPressed = false);
+
+            setupUIRefs();
+            updateHUD();
+            updateModeButtons();
+            changeStageAppearance();
         }
 
         function onWindowResize() {
@@ -495,6 +730,10 @@
         }
 
         function setMode(m) {
+            if (!isModeUnlocked(m)) {
+                showToast('아직 잠겨 있는 모드예요!');
+                return;
+            }
             mode = m;
             document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('btn-' + m).classList.add('active');
