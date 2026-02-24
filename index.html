@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; color: #fff; font-family: "Pretendard", -apple-system, sans-serif; }
+        body { margin: 0; overflow: hidden; background: #020617; color: #fff; font-family: "Pretendard", -apple-system, sans-serif; transition: background 0.6s ease-out; }
         canvas { display: block; touch-action: none; }
         .glass-ui {
             background: rgba(10, 10, 25, 0.85);
@@ -72,18 +72,26 @@
 
     <div id="flash-overlay"></div>
 
-    <!-- 진행도 / 통계 HUD -->
-    <div id="hud-panel" class="fixed top-24 md:top-28 left-4 z-40 glass-ui rounded-2xl px-3 py-2 text-[11px] md:text-xs leading-tight pointer-events-none">
-        <div id="hud-stage" class="font-bold text-indigo-300 text-xs md:text-sm">STAGE 1</div>
-        <div id="hud-progress" class="mt-0.5 text-slate-100">행성 0 / 10</div>
-        <div id="hud-boss" class="mt-0.5 text-pink-200">보스 0</div>
+    <!-- 진행도 HUD (중앙 하단, 모드 선택/조작 영역과 분리) -->
+    <div id="hud-panel" class="fixed bottom-4 md:bottom-6 left-1/2 -translate-x-1/2 z-40 glass-ui rounded-2xl px-3 py-2 text-[11px] md:text-xs leading-tight pointer-events-none">
+        <div class="flex items-center gap-2">
+            <div id="hud-stage" class="rounded-full px-2.5 py-1 bg-indigo-600/80 text-[11px] md:text-xs font-extrabold tracking-tight shadow-lg">
+                STAGE 1
+            </div>
+            <div id="hud-progress-label" class="font-semibold text-slate-50 text-[11px] md:text-xs">
+                티니핑 0 / 6
+            </div>
+        </div>
+        <div class="mt-1.5 w-32 md:w-36 h-1.5 rounded-full bg-slate-700/70 overflow-hidden">
+            <div id="hud-progress-bar" class="h-full w-0 bg-gradient-to-r from-indigo-400 via-sky-400 to-emerald-400 transition-all duration-200"></div>
+        </div>
     </div>
 
     <div id="toast" class="text-sm md:text-base uppercase tracking-tight drop-shadow-2xl"></div>
 
     <!-- UI 상단: 캐러셀 레이아웃 적용 -->
     <div class="fixed top-4 md:top-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-5xl text-center pointer-events-none px-4">
-        <h1 class="text-xl md:text-3xl font-black mb-2 md:mb-1 tracking-tighter drop-shadow-2xl italic uppercase text-indigo-300">☄️ PLANET HUNTER V3</h1>
+        <h1 class="text-xl md:text-3xl font-black mb-2 md:mb-1 tracking-tighter drop-shadow-2xl italic uppercase text-indigo-300">☄️ 캐치 티니핑 V3</h1>
         
         <!-- 버튼 캐러셀 컨테이너 -->
         <div class="glass-ui p-2 md:p-3 rounded-[1.5rem] md:rounded-[2rem] pointer-events-auto shadow-indigo-500/20">
@@ -132,14 +140,14 @@
         let planetsDestroyedTotal = 0;
         let planetsDestroyedThisStage = 0;
         let bossesDefeated = 0;
-        const PLANETS_PER_STAGE = 10;
+        let planetsGoalThisStage = 0;
         const BOSS_SPAWN_INTERVAL = 15;
         let bossActive = false;
         let currentBoss = null;
 
         const unlockedModes = new Set(['fireworks', 'hearts', 'stars', 'snow']);
 
-        let hudStageEl, hudProgressEl, hudBossEl, toastEl;
+        let hudStageEl, hudProgressLabelEl, hudProgressBarEl, toastEl;
         let mainLight = null;
         let starsMaterial = null;
         const stageLightColors = [0x6366f1, 0xa855f7, 0xf97316, 0x22c55e, 0xec4899];
@@ -285,7 +293,104 @@
             }
         }
 
-        // --- 파티클 및 행성 클래스 ---
+        let hitSfx, destroySfx, stageSfx;
+
+        function loadSfx() {
+            hitSfx = new Audio('assets/sounds/hit.mp3');
+            destroySfx = new Audio('assets/sounds/destroy.mp3');
+            stageSfx = new Audio('assets/sounds/stage.mp3');
+        }
+
+        function playSfx(baseAudio, volume = 0.9) {
+            if (!soundEnabled || !baseAudio) return;
+            try {
+                const a = baseAudio.cloneNode();
+                a.volume = volume;
+                a.play();
+            } catch (e) {
+                // ignore play errors
+            }
+        }
+
+        function playHitSfx() {
+            playSfx(hitSfx, 0.85);
+        }
+
+        function playDestroySfx() {
+            playSfx(destroySfx, 0.95);
+        }
+
+        function playStageSfx() {
+            playSfx(stageSfx, 0.9);
+        }
+
+        // --- 파티클 및 티니핑 클래스 ---
+
+        const textureLoader = new THREE.TextureLoader();
+        const planetImagePaths = [
+            'assets/images/dybGthA4t7OXmkRjLfrA50A4vzFgJIB3gWJtHBbs-bEShunJ1qef9Q5YnXQD4NlyElf62fw8OyWZDbbw-QMA44Fl_Cv7NGv7aX95t_zVy1vdZPTvG54TzRGq_YhUD8Lohh5Upy_m1VjnqtzPaFZQlg.webp',
+            'assets/images/1wtl_e9mmBImzxS8dqTG8AA0ZlnpkLo7nKgYBUAReoopoi44WB4toVFEKBn8n7YSMJX1bphXw9FssKlYoHPSVGQpRVnaMckmXcI7MHq-ZydwRCapWboxMIrvHtsgzHZSyGCLiRTP9-8x_5VmT-hNFA.webp',
+            'assets/images/d6V073--QEYt8u7c5mdPVT8k-IG06wA8xov0hfSIzjZT20rscBtW4zJQ3e5RZ8jJWiv7RSVvwwz20ft22iPpqQhmP4qgU3XtFIpnM-MzIUUIHdEXbAf7U_rnFyByM5YiLIUqh_hhqWTqEsm5Bi2Tzg.webp',
+            'assets/images/GbJLETciLZKPUjSTJBkT4hZ_gI6KRBkzEPkfslMYviXaosp6DoiwBe-dY6MUdWuYLcJnuxG4sF8EUUFlhbapy4Sw22ngUb0f4l8dKgBqrqry8BaZ_SOuCVkfF6JCAXAkHewi8--64Y-R1bghJ3ImGw.webp',
+            'assets/images/6gkk3itxdarRdtHSXWYR4nF3uRqy2YxH1y92vyGcvzlxp1t7-D416tWjPDbxkAFvbkmaKmddbxXd1uQ5bJAsStnDdiESoKC5-VIdMkklY-znnCV_4OXVHoK2zxLj_jq6jC5zdgvSMWJI-9OkhYYHIw.webp',
+            'assets/images/8P-1BgOjFoNRzQHMz83TUrLnol9ks6fsHgjMboySlzfy7tsJwQalfoc6Vq_Lq1bBOMTClDWA5S_ht-1ftgjmVeO_nXJgbDoOXze_cjcXsRXTBzXOPss9nB7VKwNinNat1hqOC3O5VAY3WXsj8fyMTg.webp',
+            'assets/images/mZRwJ6DwBVxDEKQFYJBCxzlnRzQAMkCHpSxqwyYmcWfh4Ca1DltMsVZAvMGL25WAqEBqK2BTG9I-4i-I1ysBE5Ulykt55BaNJwNeeQl84N-mSivB9qKFLOi9Hk7V1vDzJbnKoLq30z6rMeAE46Uavg.webp',
+            'assets/images/fuprT0vFxS2ayUPj7vRYdM1mxRgSNR36Drp3VWV-b2diu2gitnnSUC9FlUV1cusTB3--fJy7VeK0WArrqDWgwPJ_mvyPNU9QaXePNc8VgeQpMZ5CO-yq3JUSCwUPJJjnhTK3vXmyHHBdYfIlmueGQg.webp',
+            'assets/images/f15kk4vUhinlaAmJMkJR_XXqXgQwz_w6_aDWl3LEVo4s2-CyRhFHMEE7TWWDbCaXc1gqPhJZ3-MSuWYstaVrfyChIuhfa9YNlwj_H2kpuI0mEoCKc8wq7NzI2gkf0PnFdSY67jkj0Sq7RH6UlhDYaw.webp',
+            'assets/images/ktYEO51LqZm8VJKkzhem8dBSgsskS_mfiVR7wq_VBeF-O2KOhXvh9xbVKL-JUDuFxMcssZyrTwgVHfB1735Us1U4abZJkQ93ggetSyDtOFSDyj8IKNVrF4huSIOSo42iEQoKYeOTl5Jk-zuDg-aIww.webp',
+            'assets/images/B_ma9Fj33hhLaELqPPdydBp4RWFo6Qo-bJZxHpikIGCYG2ilN_VWceZLufhD0ffJ6ZBYfXWQZgY5ZgXzC5_CAiAI9FeVZ0K_Cmm8ZRmm4ZCI_5RBSx736rtsRRW_8ymbnUr_dTEciLo9T53r-CL7pQ.webp',
+            'assets/images/I-m6IdJACJiMbXMLHOc1IbT3BTg1-MuNyndc6rr_MvoNiY8gn7MhIUGISmORDDrEaWT5pLDZO-l_FL95_XFih4Nu5qYnGcw8ohRQh2krR2mL-qBBQekSsiJ5nm6QXoKMPwiYOIbXcVCj0cT3gIdkTA.webp',
+            'assets/images/pr5LIstSdDvuUEQWT4DgrYAaLk6dV_NFEBu-2d9CuhM-lHWKnesN1wY_6irLnBqCTMGhIdZhDeXaaVX7UDpbLFi7CMQBWo63cfTKAUx84Fy8PyygBYZWA9AabimXEcQJuucvQJ6F1VtXhcUsVvnRYw.webp',
+            'assets/images/-puvqmBetHbrAiFA2igXLnzOXhCUMK_OpfSlQOP2UyHdstNBulXbqjvuNwFecjDvxm5DHQsFpENnff0rWMXeY4GkeFHqnWTHLdPl9TjhTZHNXIHK4tkeTmD19bOM182VS0cNCaJCGPw4w7Bwl7VAMw.webp',
+            'assets/images/P44LuRBl5VMXxWEyLZjCKWdyylNrG7oVJtNIVbccYfuOlE1o80666fx30ixE7SGJkR1vs_0EEzJO_t7_hOVcSSCxjvQSyncFlrc0TLh6CIdGiMU95p1fN3aoD0SJwWLMzjbZB5KMsYww71pOusKeEg.webp',
+            'assets/images/7_xwYS4FLpVLJ4wgZgZYpn6VwSFHIrJHNF01tjo_saz9eshqXtnCMJxlxpawaI_wUA6mZaWlH1ZhsmSB6NCRYLkebJp_E5gnksRw4_vNHOlZEGrmJof3GXhsu2ZZBLEP5blJuPJ5YE4PMju9qXS3Yg.webp',
+            'assets/images/ZFNdxRgClIfGSpx6zw3s4Tskst48cPUBqEIQuzy15j4YjMcJ18JucJIAa6-sO4iLzsaDYagKvEqjBOralGmur8e85i_WYhf3UX0gN0S1lCSszA7X5NUH7E-mBYzeLjWmULKPSH_DQmVX98DFd4YIrw.webp',
+            'assets/images/MXHO8wiJE0YRyjmxzgvpr4VXjQi9nOOqWwqCP1zmP4eD608xGm3436d0Umay1HVuAemf9llhhGpF1NplvlDgbvZodTQKQ4tqz8G-2V3a1aqeTwEdDXQlrjxeKx3tta_1nc6_t8coc9wlBYaf-3dhKw.webp',
+            'assets/images/hYYzWB9kuesMolpKUvdIEsmXOlL2bHrXX_yHoak6CcToD47jmpRlr-9PsHg9bzmV2FRdZPJ-x_eDx2S3m71KkUj7suZYkD4P9BbTrIWosneE_hGNwc3Bz9HXAco8PSmtP-v7zagyL9Xp46Bq_EfGkQ.webp',
+            'assets/images/-WqHXxVH_cVg-UG8Acc3WhLMdQ3ERBhAWa2tFSKexEWCsUaQBTMCIt5emM70bA4xI5LiYF0lMv1Jqr1i_OY80ekCjn_AJC1IBbV45Iro4x1ztMYxMsmxxEz3xJPBetRN0zMFFFSGG8FI6Q8g-CVh3Q.webp',
+            'assets/images/ogpHFSFvQmJdEwXd8LSa6eBKOUudC1Dko85J2xDOW4mOwT2DJz0hOo3T4QUSu44ZRxuI05yC0u1uKB8cLTJUKgxKWk-j4xw2i4sZXSF7b0PsTggTr1Cf0BBmRw3AZ6jDHC5qJqYnXfbXgB3loD7DDg.webp',
+            'assets/images/N0tDLjjq1Y_X624F0NmGD9qeqTVxYNWhSX6j3RR1xprOs0llkfOxhkN7rFDsrB537SBjbeNa5iIIQ4i9mcO3xKYvZZ4Zjdh7h5oL-fW1zj_FL8Tl8PWWGVHmwF0puPSJyCmqyzmrt_YU88lrEjDOtA.webp',
+            'assets/images/ermvN0i4xfaJBBTTnhC0IQnUlerJ1Iwz39TlB-YJf6nxsvKIOPfven8MgRfS2HT-7jyK53VPeZlxNUxWP0k1scq8it-dRTfCwsq9W-37ObPE7jlnxnWugLzWSnGT35Z64m8Z0HnJmKlPv_atCMWRbA.webp',
+            'assets/images/GugpFxG5iuF53o_ZZ1v04n-ejkeEYg-WGlaevso6GlmBojJ5HH92F_JvMeDlMcGQZ4NruKuaNZj40h2p_0r7GcSTgDLzuqO4znUytNf7FLetqR8IZh-NyTrNCXqnM0b3_LJ1z9HN_W7Uc901pgGzZQ.webp',
+            'assets/images/0uANUIFg8OgoSh4MakLlowVOPN3CtNgDPXWTkImMG6lRE11wZyF3nd7HOlydhewGHR8ick02KjqGcRV6B47p5ff-zMrfupv3WadhWJap0AhNTwp3I0fYw2UnI_Q9MiaLGU1CDcuHUbjySdfXPY1fCw.webp',
+            'assets/images/pX-7-kSI0Bqk9RXYYUAvasQl3U-SPTGVdaQX0fE4nL_9Hrm3X0QSoFMcfscWI10qmDNR6tcfOaSqwKQWT-WDh_pEdRcnJk2Eq7I65Kd07P34mTuC8j_71nR_Zg7lRX16sqsKklx9vFDfm9yxv5A9-g.webp',
+            'assets/images/XQ87B4AU1qNfCIIanmfL_WGXK4WnJZx0ktmbY7TUAnmR2W8ROjgS63QapqgFnW5wyaWv6yVgo8e0jy-EqG-YiB0iPk5WIVvYfmSqkgRoKiItSEcXSPVnmbsinIGKHx3ej4FKUdEpFIysnWVvvr1Hlw.webp',
+            'assets/images/ErKllZbaAvHi4yUybAmCKQCu0rnx23qcTv1VR5N71CmxeseYBDJiAMxRObLHaTfWtmWQpHC7RnxL6tN30QLCgyZV4QDz6geAZbDKBagMjKkB304J839-IJ9_D8ITdtx7LfCXiwqZNPmWMDi3q279Tw.webp',
+            'assets/images/wqA5FX6TbeltY3at3kptr_dZN5JNi0EjyrsejSdhZQeJU495Y-Tr2uO0X2HrRKkqDc-8xZjKkn_eoXEi7NC7QrKNTxP54DdjR4ZwKq14HMHfk_g0hKHXmBZdd-d5xflaJFWgt3G0vJUJjzg4I-kcIg.webp',
+            'assets/images/Db3_VtpF3qXxtHolfnWCKCaVGCKIA0fZ8KBLJ2t3A_h9NfrkcUoU_2FhuoGVoKXlntmovVC_2_LyT0RXwW4od4-2DyZ2awwJgRi_znDpnCdvBJDbMkSbsBXisfO55HdeegOhNjUFNbbEOMxpZRedfg.webp',
+            'assets/images/pubfJTVMLuPSmYP49CnXLsf0XDa3RcSXmqIE-QDABjkCKTv-mlPBKmTj4VLQTiF7ekOK6lDVXT0rapEkdLRa0BR9Rzjl4AioDh6enibxnAeiWP1ID42OsQouNkyzknpwRzvuhX5Q8UHvx2u0brbVlg.webp',
+            'assets/images/FyePenv5dYHju0CxCosusyayrCYavvYojoEHB47Z6PI8PcCOJkPap44SDlldG1lOXSMZKWVebzghfsPVfO0yixd3nIxg1F1CH3wreewFekh19xcoKVP5zCAhg0G149nNkHvJ14XPfEEKnf-G1mgIqQ.webp',
+            'assets/images/oZheDac4xxdq0ZgDlwBbtqAO15o06XqZ-AiajveBOzWXPACw-9y78243lrk5FfDnIQ31Acaz8Qw8lgTdua7gAaa7x64vbmuL9XKgltqupAPlB2pMqMjeq0i3tfn9XyGpkPsMo8xCBOYTt1BrfwVWmA.webp',
+            'assets/images/0yBRcpGgdOlRvd52Z0GcaXEToCLEJIPmjFnUN1K8uFYHcwizLyfw_uEx8CVXMf4_PfR15cI8TRJnHHeyQHDpFVU2B1QMmngRjiUgGM80ii7c1_m6dX90YW3RL5zE5AOZ29IRb1bxP4sFyogUCCkt0g.webp',
+            'assets/images/9by1oQAlz95oMhfF0W1iMVb52d4O6NbGQM6Cp2RuWKwDdISX0ghRrbfNfal6qE7mHHBJrr2FVjKOb81OfhFQL6MwoNqb3MkZ96oGf78giciuVhqfoXF1qADrEhKfOdzSPU9fgocNCMcTkDm08-T4NQ.webp',
+            'assets/images/dL5BJp82evOOmR34zAb0zMfV-xrkiNZ2fX4L60_4aLt4D3jCWLGwG-k4dJp8NNTAhB-WOt6aWap7ko0-ikxeYy_alxUK6MA9R4gWNfGsTSgbb9Q9oawnvGzWFVN7Iw5T_ZOuGwtHZPB5ebFM7cUQAQ.webp',
+            'assets/images/LAbHxhAwLMTXBk4RZLLihPyS8LMFa5oogRGkAvu_bUP9Bh-cNOJEYDRTyccnLCw725U3XbkSgrhZO0WAlm80Im5rh-aiNAsJQ-gob-QCA39-cy-AOUrNdHUTEfi3hkvAWlQ14N3QGgHTeX26v5cFKw.webp',
+            'assets/images/Q5_3-vUuRMDlNuBYfF0XyfZFgMogLf-Mv0rEFirlE6n5evHkj9itahRUS0-JjoGkfnX8RH9-UTC50OBfg24KermhWIe0ADnLjO1LAo5dyouU2Jwi6NPLW2XxnyumDMYcp9Bw3tCGaFK0EV6HXviKdg.webp'
+        ];
+
+        let planetImageOrder = [];
+        let planetImageIndex = 0;
+
+        function resetPlanetImageOrder() {
+            planetImageOrder = planetImagePaths.slice();
+            for (let i = planetImageOrder.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [planetImageOrder[i], planetImageOrder[j]] = [planetImageOrder[j], planetImageOrder[i]];
+            }
+            planetImageIndex = 0;
+        }
+
+        function getNextPlanetImagePath() {
+            if (!planetImageOrder.length) {
+                resetPlanetImageOrder();
+            }
+            const path = planetImageOrder[planetImageIndex];
+            planetImageIndex++;
+            if (planetImageIndex >= planetImageOrder.length) {
+                resetPlanetImageOrder();
+            }
+            return path;
+        }
 
         class MagicParticle {
             constructor(pos, isMagic = true, isExplosion = false, isClick = false) {
@@ -343,32 +448,28 @@
                 this.isBoss = isBoss;
                 this.shake = 0;
 
-                let radius;
-                if (this.isBoss) {
-                    this.maxHp = 10;
-                    this.hp = this.maxHp;
-                    radius = 150;
-                    this.baseColor = new THREE.Color(0xf97316);
-                } else {
-                    this.maxHp = 3 + Math.floor(Math.random() * 3);
-                    this.hp = this.maxHp;
-                    radius = 75 + Math.random() * 60; // 행성 크기 확대
-                    this.baseColor = new THREE.Color(`hsl(${Math.random() * 360}, 50%, 45%)`);
-                }
+                this.maxHp = this.isBoss ? 10 : 3 + Math.floor(Math.random() * 3);
+                this.hp = this.maxHp;
+                this.size = this.isBoss ? 780 : 190 + Math.random() * 60;
+                this.radius = this.size * 0.5;
                 this.isDestroyed = false;
-                this.radius = radius;
-                
-                const geometry = new THREE.SphereGeometry(this.radius, 32, 32);
-                this.material = new THREE.MeshStandardMaterial({ 
-                    color: this.baseColor, roughness: 0.8, emissive: this.baseColor, emissiveIntensity: 0.3 
+
+                const imagePath = getNextPlanetImagePath();
+                const texture = textureLoader.load(imagePath);
+
+                // 원본 색감을 그대로 쓰기 위해 조명 영향을 받지 않는 기본 머티리얼 사용
+                this.material = new THREE.MeshBasicMaterial({ 
+                    map: texture,
+                    transparent: true
                 });
                 
+                const geometry = new THREE.PlaneGeometry(this.size, this.size);
                 this.mesh = new THREE.Mesh(geometry, this.material);
                 this.mesh.userData = { parent: this };
 
                 this.hpLabel = this.createHPLabel();
                 this.mesh.add(this.hpLabel);
-                this.hpLabel.position.set(0, this.radius + 30, 0);
+                this.hpLabel.position.set(0, this.size * 0.55, 0);
 
                 this.reset();
             }
@@ -411,7 +512,13 @@
                     this.rotationVel = new THREE.Vector3(0.004, 0.006, 0.002);
                 } else {
                     this.mesh.position.set((Math.random()-0.5)*2600, (Math.random()-0.5)*1800, (Math.random()-0.5)*1000 - 500);
-                    this.velocity = new THREE.Vector3((Math.random()-0.5)*1.4, (Math.random()-0.5)*1.4, (Math.random()-0.5)*0.5);
+                    const speedBase = 1.2 + currentStage * 0.15;
+                    const speed = Math.min(speedBase, 2.6);
+                    this.velocity = new THREE.Vector3(
+                        (Math.random()-0.5) * speed,
+                        (Math.random()-0.5) * speed,
+                        (Math.random()-0.5) * 0.5
+                    );
                     this.rotationVel = new THREE.Vector3(Math.random()*0.01, Math.random()*0.01, Math.random()*0.01);
                 }
             }
@@ -429,6 +536,7 @@
                     this.hpLabel.material.opacity = 0;
                     
                     triggerFlash();
+                    playDestroySfx();
                     playMagicSound(mode, true);
                     spawnMagic(this.mesh.position, true, true, isMobile ? 80 : 150); // 파괴 폭발
 
@@ -444,7 +552,7 @@
                     }
                 } else {
                     this.updateHPLabel();
-                    playMagicSound(mode, false);
+                    playHitSfx();
                     this.material.emissiveIntensity = 12.0;
                 }
             }
@@ -452,8 +560,7 @@
             update() {
                 if (this.isDestroyed) return;
                 this.mesh.position.add(this.velocity);
-                this.mesh.rotation.x += this.rotationVel.x;
-                this.mesh.rotation.y += this.rotationVel.y;
+                this.mesh.rotation.z += this.rotationVel.y;
 
                 if (this.shake > 0) {
                     this.mesh.position.x += (Math.random()-0.5) * this.shake;
@@ -510,8 +617,8 @@
 
         function setupUIRefs() {
             hudStageEl = document.getElementById('hud-stage');
-            hudProgressEl = document.getElementById('hud-progress');
-            hudBossEl = document.getElementById('hud-boss');
+            hudProgressLabelEl = document.getElementById('hud-progress-label');
+            hudProgressBarEl = document.getElementById('hud-progress-bar');
             toastEl = document.getElementById('toast');
 
             document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -519,13 +626,28 @@
                     btn.dataset.label = btn.textContent.trim();
                 }
             });
+
+            planetsGoalThisStage = getPlanetsGoalForStage(currentStage);
+        }
+
+        function getPlanetsGoalForStage(stage) {
+            if (stage <= 1) return 6;
+            if (stage === 2) return 8;
+            if (stage === 3) return 10;
+            if (stage === 4) return 12;
+            return 14;
         }
 
         function updateHUD() {
-            if (!hudStageEl || !hudProgressEl || !hudBossEl) return;
+            if (!hudStageEl || !hudProgressLabelEl) return;
+
             hudStageEl.textContent = `STAGE ${currentStage}`;
-            hudProgressEl.textContent = `행성 ${planetsDestroyedThisStage} / ${PLANETS_PER_STAGE}`;
-            hudBossEl.textContent = `보스 ${bossesDefeated}`;
+            hudProgressLabelEl.textContent = `티니핑 ${planetsDestroyedThisStage} / ${planetsGoalThisStage}`;
+
+            if (hudProgressBarEl) {
+                const ratio = planetsGoalThisStage ? Math.min(1, planetsDestroyedThisStage / planetsGoalThisStage) : 0;
+                hudProgressBarEl.style.width = `${ratio * 100}%`;
+            }
         }
 
         let toastTimeout;
@@ -544,14 +666,26 @@
             const color = stageLightColors[(currentStage - 1) % stageLightColors.length];
             mainLight.color.setHex(color);
             starsMaterial.color.setHex(color);
+            
+            // 스테이지 색을 아주 살짝만 섞은 어두운 단색 배경
+            const r = (color >> 16) & 255;
+            const g = (color >> 8) & 255;
+            const b = color & 255;
+            const factor = 0.2;
+            const dr = Math.round(r * factor);
+            const dg = Math.round(g * factor);
+            const db = Math.round(b * factor);
+            document.body.style.background = `rgb(${dr}, ${dg}, ${db})`;
         }
 
         function advanceStage() {
             currentStage++;
             planetsDestroyedThisStage = 0;
+            planetsGoalThisStage = getPlanetsGoalForStage(currentStage);
             updateHUD();
             checkUnlocks();
             changeStageAppearance();
+            playStageSfx();
             showToast(`STAGE ${currentStage} 시작!`);
         }
 
@@ -571,7 +705,7 @@
             planetsGroup.add(boss.mesh);
 
             updateHUD();
-            showToast('큰 행성 등장!');
+            showToast('큰 티니핑 등장!');
         }
 
         function onPlanetDestroyed() {
@@ -580,7 +714,7 @@
             updateHUD();
             checkUnlocks();
 
-            if (planetsDestroyedThisStage >= PLANETS_PER_STAGE && !bossActive) {
+            if (planetsDestroyedThisStage >= planetsGoalThisStage && !bossActive) {
                 advanceStage();
             }
 
@@ -607,7 +741,7 @@
 
             updateHUD();
             checkUnlocks();
-            showToast('큰 행성 격파!');
+            showToast('큰 티니핑 격파!');
 
             const prevMode = mode;
             unlockMode('rainbow');
@@ -719,6 +853,7 @@
             window.addEventListener('mouseup', () => isPressed = false);
 
             setupUIRefs();
+            loadSfx();
             updateHUD();
             updateModeButtons();
             changeStageAppearance();
