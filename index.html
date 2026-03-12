@@ -97,23 +97,23 @@
         <!-- 버튼 캐러셀 컨테이너 -->
         <div class="glass-ui p-2 md:p-3 rounded-[1.5rem] md:rounded-[2rem] pointer-events-auto shadow-indigo-500/20">
             <div class="flex items-center gap-2 overflow-x-auto no-scrollbar snap-x snap-mandatory px-2">
-                <button onclick="setMode('fireworks')" id="btn-fireworks" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold active snap-center">🎆 대폭발</button>
-                <button onclick="setMode('hearts')" id="btn-hearts" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">💖 핑크하트</button>
-                <button onclick="setMode('stars')" id="btn-stars" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">⭐ 황금별빛</button>
-                <button onclick="setMode('lightning')" id="btn-lightning" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">⚡ 푸른번개</button>
-                <button onclick="setMode('snow')" id="btn-snow" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">❄️ 눈송이</button>
-                <button onclick="setMode('petals')" id="btn-petals" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">🌸 꽃잎</button>
-                <button onclick="setMode('bubbles')" id="btn-bubbles" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">🫧 비눗방울</button>
-                <button onclick="setMode('vortex')" id="btn-vortex" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">🌪️ 소용돌이</button>
-                <button onclick="setMode('blackhole')" id="btn-blackhole" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">🌀 블랙홀</button>
-                <button onclick="setMode('rainbow')" id="btn-rainbow" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">🌈 무지개</button>
+                <button data-umami-event="btn_fx_fireworks" onclick="setMode('fireworks')" id="btn-fireworks" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold active snap-center">🎆 대폭발</button>
+                <button data-umami-event="btn_fx_hearts" onclick="setMode('hearts')" id="btn-hearts" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">💖 핑크하트</button>
+                <button data-umami-event="btn_fx_stars" onclick="setMode('stars')" id="btn-stars" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">⭐ 황금별빛</button>
+                <button data-umami-event="btn_fx_lightning" onclick="setMode('lightning')" id="btn-lightning" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">⚡ 푸른번개</button>
+                <button data-umami-event="btn_fx_snow" onclick="setMode('snow')" id="btn-snow" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">❄️ 눈송이</button>
+                <button data-umami-event="btn_fx_petals" onclick="setMode('petals')" id="btn-petals" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">🌸 꽃잎</button>
+                <button data-umami-event="btn_fx_bubbles" onclick="setMode('bubbles')" id="btn-bubbles" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">🫧 비눗방울</button>
+                <button data-umami-event="btn_fx_vortex" onclick="setMode('vortex')" id="btn-vortex" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">🌪️ 소용돌이</button>
+                <button data-umami-event="btn_fx_blackhole" onclick="setMode('blackhole')" id="btn-blackhole" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">🌀 블랙홀</button>
+                <button data-umami-event="btn_fx_rainbow" onclick="setMode('rainbow')" id="btn-rainbow" class="mode-btn px-4 py-2.5 rounded-xl md:rounded-2xl text-xs font-bold snap-center">🌈 무지개</button>
             </div>
         </div>
     </div>
 
     <button onclick="toggleMute()" id="audio-toggle" class="fixed bottom-6 right-6 md:bottom-8 md:right-8 z-50 glass-ui w-14 h-14 rounded-full flex items-center justify-center text-2xl transition-all hover:scale-110 active:scale-90 shadow-2xl pointer-events-auto">🔊</button>
 
-    <div id="container"></div>
+    <div data-umami-event="field" id="container"></div>
 
     <script>
         // --- 하이브리드 설정 ---
