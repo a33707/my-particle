@@ -793,6 +793,10 @@
             renderer = new THREE.WebGLRenderer({ antialias: !isMobile, alpha: true });
             renderer.setPixelRatio(config.pixelRatio);
             renderer.setSize(window.innerWidth, window.innerHeight);
+            const canvasElement = renderer.domElement; // canvas 요소를 가져옵니다.
+            canvasElement.setAttribute('data-umami-event', 'canvas-click'); // data-umami-event 속성을 추가합니다.
+            
+            document.getElementById('container').appendChild(canvasElement); // canvas를 DOM에 추가합니다.
             document.getElementById('container').appendChild(renderer.domElement);
             
             const light = new THREE.PointLight(0xffffff, 3.5, 10000);
