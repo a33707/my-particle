@@ -7,6 +7,7 @@
     <title>☄️ 캐치 티니핑 V3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { margin: 0; overflow: hidden; background: #020617; color: #fff; font-family: "Pretendard", -apple-system, sans-serif; transition: background 0.6s ease-out; }
         canvas { display: block; touch-action: none; }
@@ -756,6 +757,21 @@
             }
         }
 
+        // 새로운 데이터 저장 함수 추가
+        async function saveGameRecord(stage, score) {
+            const { data, error } = await supabaseClient
+                .from('tini_ping_records') // 미리 만들어둔 테이블 이름으로 변경 필요
+                .insert([
+                    { stage: stage, total_score: score, played_at: new Date().toISOString() }
+                ]);
+
+            if (error) {
+                console.error('기록 저장 실패:', error);
+            } else {
+                console.log('스테이지 클리어 기록 저장 완료!');
+            }
+        }
+        
         function isModeUnlocked(m) {
             return unlockedModes.has(m);
         }
@@ -897,6 +913,12 @@
             }
             renderer.render(scene, camera);
         }
+
+        // --- Supabase 초기화 ---
+        
+        const supabaseUrl = 'https://tlhynvwjlxkfkxqzpdla.supabase.co';
+        const supabaseKey = 'sb_publishable_2d_lvKPhIl-bxuWIpjZlUg_RXTstwKw';
+        const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
         init();
         animate();
