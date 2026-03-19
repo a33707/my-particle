@@ -789,17 +789,14 @@
             const modal = document.getElementById('leaderboard-modal');
             const listEl = document.getElementById('leaderboard-list');
             
-            // 로딩 상태 표시
             listEl.innerHTML = '<li class="text-center text-slate-300 py-4 font-semibold">순위를 불러오는 중... 🌟</li>';
-            
-            // 모달 표시 (애니메이션)
             modal.classList.remove('opacity-0', 'pointer-events-none');
             
-            // Supabase에서 데이터 조회 (내림차순, 상위 10개)
+            // total_score, stage 대신 score, player_name 조회
             const { data, error } = await supabaseClient
                 .from('tini_ping_records')
-                .select('total_score, stage')
-                .order('total_score', { ascending: false })
+                .select('score, player_name')
+                .order('score', { ascending: false })
                 .limit(10);
 
             if (error) {
@@ -814,21 +811,70 @@
                 const li = document.createElement('li');
                 li.className = 'flex justify-between items-center bg-slate-800/40 border border-slate-600/30 px-4 py-3 rounded-xl backdrop-blur-md';
                 
-                // 상위 3명에게만 특별한 아이콘 부여
                 let rankTrophy = `${index + 1}위`;
                 if (index === 0) rankTrophy = '🥇 1위';
                 if (index === 1) rankTrophy = '🥈 2위';
                 if (index === 2) rankTrophy = '🥉 3위';
 
+                // 플레이어 이름과 점수를 매핑하여 렌더링
+                const playerName = record.player_name || '알 수 없음';
+
                 li.innerHTML = `
                     <div class="flex items-center gap-3">
                         <span class="font-black text-emerald-300 w-12">${rankTrophy}</span>
-                        <span class="text-xs text-slate-300 font-semibold">STAGE ${record.stage}</span>
+                        <span class="text-sm text-slate-300 font-semibold">${playerName}</span>
                     </div>
-                    <span class="font-black text-indigo-300 text-lg">${record.total_score}점</span>
+                    <span class="font-black text-indigo-300 text-lg">${record.score}점</span>
                 `;
                 listEl.appendChild(li);
             });
+        }
+
+        async function finishGame() {
+            if (planetsDestroyedTotal === 0) {
+                showToast('아직 티니핑을 1마리도 잡지 못했어요!');
+                return;
+            }
+
+            isGameOver = true;
+            document.getElementById('flash-overlay').style.opacity = '0.4';
+            
+            const modal = document.getElementById('game-over-modal');
+            const myScoreEl = document.getElementById('my-final-score');
+            const myRankEl = document.getElementById('my-final-rank');
+            
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+
+            // 1. 설계된 스키마에 맞춰 내 기록 저장
+            const { error: insertError } = await supabaseClient
+                .from('tini_ping_records') // 실제 테이블 이름으로 확인 필요
+                .insert([{ 
+                    player_name: '소미',
+                    score: planetsDestroyedTotal,
+                    achieved_at: new Date().toISOString(),
+                    is_offline_sync: false
+                }]);
+
+            if (insertError) {
+                myScoreEl.textContent = '저장 실패 😢';
+                console.error('Insert 에러:', insertError);
+                return;
+            }
+
+            // 2. 내 순위 계산 (total_score -> score로 변경)
+            const { count, error: countError } = await supabaseClient
+                .from('tini_ping_records')
+                .select('*', { count: 'exact', head: true })
+                .gt('score', planetsDestroyedTotal);
+
+            if (countError) {
+                myRankEl.textContent = '? 위';
+                console.error('Count 에러:', countError);
+            } else {
+                const myRank = (count || 0) + 1; 
+                myScoreEl.textContent = `${planetsDestroyedTotal}점`;
+                myRankEl.textContent = `${myRank}위 🏆`;
+            }
         }
 
         function closeLeaderboard() {
