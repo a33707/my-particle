@@ -111,10 +111,24 @@
             </div>
         </div>
     </div>
-
+    
+    <button onclick="showLeaderboard()" class="fixed top-4 right-4 md:top-6 md:right-6 z-50 glass-ui px-4 py-2.5 rounded-2xl text-sm font-bold active:scale-95 transition-all flex items-center gap-1 shadow-lg">🏆 랭킹</button>
     <button onclick="toggleMute()" id="audio-toggle" class="fixed bottom-6 right-6 md:bottom-8 md:right-8 z-50 glass-ui w-14 h-14 rounded-full flex items-center justify-center text-2xl transition-all hover:scale-110 active:scale-90 shadow-2xl pointer-events-auto">🔊</button>
 
     <div id="container"></div>
+
+    <div id="leaderboard-modal" class="fixed inset-0 z-[200] flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300 bg-black/60 backdrop-blur-sm">
+        <div class="glass-ui p-6 md:p-8 rounded-[2rem] w-11/12 max-w-sm text-center shadow-2xl">
+            <h2 class="text-2xl font-black mb-6 text-indigo-300 drop-shadow-md">🏆 명예의 전당</h2>
+            
+            <ul id="leaderboard-list" class="space-y-2 text-left mb-6 max-h-60 overflow-y-auto no-scrollbar">
+                </ul>
+            
+            <button onclick="closeLeaderboard()" class="w-full py-3 rounded-2xl bg-slate-700/80 text-white font-bold hover:bg-slate-600 active:scale-95 transition-all border border-slate-500/50">
+                닫기
+            </button>
+        </div>
+    </div>
 
     <script>
         // --- 하이브리드 설정 ---
@@ -760,7 +774,7 @@
         // 새로운 데이터 저장 함수 추가
         async function saveGameRecord(stage, score) {
             const { data, error } = await supabaseClient
-                .from('tini_ping_records') // 미리 만들어둔 테이블 이름으로 변경 필요
+                .from('tini_ping_records')
                 .insert([
                     { stage: stage, total_score: score, played_at: new Date().toISOString() }
                 ]);
@@ -771,7 +785,56 @@
                 console.log('스테이지 클리어 기록 저장 완료!');
             }
         }
-        
+        async function showLeaderboard() {
+            const modal = document.getElementById('leaderboard-modal');
+            const listEl = document.getElementById('leaderboard-list');
+            
+            // 로딩 상태 표시
+            listEl.innerHTML = '<li class="text-center text-slate-300 py-4 font-semibold">순위를 불러오는 중... 🌟</li>';
+            
+            // 모달 표시 (애니메이션)
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            
+            // Supabase에서 데이터 조회 (내림차순, 상위 10개)
+            const { data, error } = await supabaseClient
+                .from('tini_ping_records')
+                .select('total_score, stage')
+                .order('total_score', { ascending: false })
+                .limit(10);
+
+            if (error) {
+                listEl.innerHTML = '<li class="text-center text-pink-400 py-4 font-bold">기록을 불러오지 못했어요 😢</li>';
+                console.error('랭킹 로드 실패:', error);
+                return;
+            }
+
+            listEl.innerHTML = '';
+            
+            data.forEach((record, index) => {
+                const li = document.createElement('li');
+                li.className = 'flex justify-between items-center bg-slate-800/40 border border-slate-600/30 px-4 py-3 rounded-xl backdrop-blur-md';
+                
+                // 상위 3명에게만 특별한 아이콘 부여
+                let rankTrophy = `${index + 1}위`;
+                if (index === 0) rankTrophy = '🥇 1위';
+                if (index === 1) rankTrophy = '🥈 2위';
+                if (index === 2) rankTrophy = '🥉 3위';
+
+                li.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <span class="font-black text-emerald-300 w-12">${rankTrophy}</span>
+                        <span class="text-xs text-slate-300 font-semibold">STAGE ${record.stage}</span>
+                    </div>
+                    <span class="font-black text-indigo-300 text-lg">${record.total_score}점</span>
+                `;
+                listEl.appendChild(li);
+            });
+        }
+
+        function closeLeaderboard() {
+            const modal = document.getElementById('leaderboard-modal');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+        }      
         function isModeUnlocked(m) {
             return unlockedModes.has(m);
         }
